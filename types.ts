@@ -18,6 +18,8 @@ export interface SiteConfig {
   dayStart: string; // HH:mm
   dayEnd: string; // HH:mm
   tagNames: string[];
+  tagIntervalMin: number;
+  tagIntervalMax: number;
 }
 
 export interface ReportData {

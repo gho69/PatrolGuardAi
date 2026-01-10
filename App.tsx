@@ -3,7 +3,6 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { parsePatrolFile } from './utils/parser';
 import { generateMissingData } from './utils/generator';
 import { PatrolLog, SiteConfig, ReportData } from './types';
-import { GoogleGenAI } from "@google/genai";
 
 const Card: React.FC<{ children: React.ReactNode, title?: string, icon?: string, className?: string }> = ({ children, title, icon, className = "" }) => (
   <div className={`glass p-6 rounded-2xl neon-border transition-all duration-300 ${className}`}>
@@ -18,7 +17,7 @@ const Card: React.FC<{ children: React.ReactNode, title?: string, icon?: string,
 );
 
 const App: React.FC = () => {
-  const [logs, setLogs] = useState<PatrolLog[]>([]);
+  const [logs, setLogs] = useState< PatrolLog[]>([]);
   const [config, setConfig] = useState<SiteConfig>({
     month: new Date().getMonth(),
     year: new Date().getFullYear(),
@@ -30,7 +29,9 @@ const App: React.FC = () => {
     nightEnd: "06:00",
     dayStart: "08:00",
     dayEnd: "17:00",
-    tagNames: Array.from({ length: 16 }, (_, i) => `Punto ${i + 1}`)
+    tagNames: Array.from({ length: 16 }, (_, i) => `Punto ${i + 1}`),
+    tagIntervalMin: 1,
+    tagIntervalMax: 3
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [aiSummary, setAiSummary] = useState<string>("");
@@ -56,7 +57,7 @@ const App: React.FC = () => {
       const content = event.target?.result as string;
       const parsedLogs = parsePatrolFile(content);
       if (parsedLogs.length === 0) {
-        alert("Errore: Il formato del file non è riconosciuto. Assicurati che sia un file di pattuglia standard (;).");
+        alert("Errore: Nessun dato valido trovato. Il sistema ha filtrato i messaggi automatici e di sistema.");
       } else {
         setLogs(parsedLogs);
       }
@@ -77,7 +78,7 @@ const App: React.FC = () => {
     try {
       const completeLogs = generateMissingData(logs, config);
       setLogs(completeLogs);
-      setAiSummary(`Analisi completata. Generati ${(completeLogs.length - logs.filter(l => !l.isGenerated).length)} nuovi punti di ispezione per completare i ${config.roundsPerShift} giri previsti.`);
+      setAiSummary(`Elaborazione completata. Il sistema ha filtrato i messaggi di "Arrivo sul posto" e ha compattato i tempi tra i tag tra ${config.tagIntervalMin} e ${config.tagIntervalMax} minuti.`);
     } catch (err) {
       console.error(err);
       setAiSummary("Errore durante l'elaborazione dei dati.");
@@ -89,7 +90,6 @@ const App: React.FC = () => {
   const exportToExcel = () => {
     // @ts-ignore
     if (!window.XLSX) return;
-    // Esportiamo solo Data, Ora, Nome Tag
     const data = logs.map(l => ({ 
       Data: l.date.split('-').reverse().join('/'), 
       Ora: l.time.substring(0, 5), 
@@ -122,7 +122,7 @@ const App: React.FC = () => {
             <h1 className="text-3xl font-orbitron font-black glow-text tracking-tighter uppercase">
               Patrol<span className="text-sky-400">Guard</span> AI
             </h1>
-            <p className="text-sky-500/60 uppercase text-[10px] tracking-[0.4em] font-bold mt-1">Quantum Reporting Interface</p>
+            <p className="text-sky-500/60 uppercase text-[10px] tracking-[0.4em] font-bold mt-1">Advanced Tactical Analysis</p>
           </div>
         </div>
 
@@ -160,14 +160,29 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="text-[10px] text-sky-400/60 uppercase font-bold block mb-2">Giri Minimi: {config.roundsPerShift}</label>
-                <input type="range" min="1" max="10" value={config.roundsPerShift} onChange={(e) => setConfig({...config, roundsPerShift: parseInt(e.target.value)})} className="w-full accent-sky-500" />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] text-sky-400/60 uppercase font-bold block mb-2">Giri: {config.roundsPerShift}</label>
+                  <input type="range" min="1" max="10" value={config.roundsPerShift} onChange={(e) => setConfig({...config, roundsPerShift: parseInt(e.target.value)})} className="w-full accent-sky-500" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-sky-400/60 uppercase font-bold block mb-2">Tag: {config.tagsPerSite}</label>
+                  <input type="range" min="1" max="32" value={config.tagsPerSite} onChange={(e) => setConfig({...config, tagsPerSite: parseInt(e.target.value)})} className="w-full accent-sky-500" />
+                </div>
               </div>
 
-              <div>
-                <label className="text-[10px] text-sky-400/60 uppercase font-bold block mb-2">Tag per Giro: {config.tagsPerSite}</label>
-                <input type="range" min="1" max="16" value={config.tagsPerSite} onChange={(e) => setConfig({...config, tagsPerSite: parseInt(e.target.value)})} className="w-full accent-sky-500" />
+              <div className="bg-sky-500/5 p-3 rounded-lg border border-sky-500/10">
+                <label className="text-[10px] text-sky-400 uppercase font-bold block mb-2">Intervallo tra Tag (Minuti)</label>
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <span className="text-[9px] text-sky-300/50 block">MIN: {config.tagIntervalMin}</span>
+                    <input type="range" min="1" max="5" value={config.tagIntervalMin} onChange={(e) => setConfig({...config, tagIntervalMin: parseInt(e.target.value)})} className="w-full accent-emerald-500" />
+                  </div>
+                  <div className="flex-1">
+                    <span className="text-[9px] text-sky-300/50 block">MAX: {config.tagIntervalMax}</span>
+                    <input type="range" min="1" max="10" value={config.tagIntervalMax} onChange={(e) => setConfig({...config, tagIntervalMax: Math.max(config.tagIntervalMin, parseInt(e.target.value))})} className="w-full accent-emerald-500" />
+                  </div>
+                </div>
               </div>
 
               <div className="pt-4 border-t border-sky-500/10 space-y-4">
@@ -192,9 +207,9 @@ const App: React.FC = () => {
             </div>
           </Card>
 
-          <Card title="Log di Sistema" icon="fas fa-info-circle">
+          <Card title="Stato Sistema" icon="fas fa-microchip">
             <p className="text-sky-300/80 italic text-xs leading-relaxed">
-              {aiSummary || "In attesa del caricamento dei dati di pattuglia..."}
+              {aiSummary || "Pronto per l'analisi dei dati di campo."}
             </p>
           </Card>
         </div>
@@ -202,15 +217,15 @@ const App: React.FC = () => {
         <div className="lg:col-span-8 flex flex-col gap-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="glass p-4 rounded-xl border-l-4 border-sky-500">
-              <span className="block text-[10px] text-sky-500 font-bold uppercase mb-1">Punti Reali</span>
+              <span className="block text-[10px] text-sky-500 font-bold uppercase mb-1">Passaggi Reali</span>
               <span className="text-2xl font-orbitron text-white">{stats.imported}</span>
             </div>
             <div className="glass p-4 rounded-xl border-l-4 border-emerald-500">
-              <span className="block text-[10px] text-emerald-500 font-bold uppercase mb-1">Punti Generati</span>
+              <span className="block text-[10px] text-emerald-500 font-bold uppercase mb-1">Passaggi Generati</span>
               <span className="text-2xl font-orbitron text-white">{stats.generated}</span>
             </div>
             <div className="glass p-4 rounded-xl border-l-4 border-indigo-500">
-              <span className="block text-[10px] text-indigo-500 font-bold uppercase mb-1">Totale Ispezioni</span>
+              <span className="block text-[10px] text-indigo-500 font-bold uppercase mb-1">Totale Report</span>
               <span className="text-2xl font-orbitron text-white">{stats.total}</span>
             </div>
           </div>
@@ -219,7 +234,7 @@ const App: React.FC = () => {
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-2">
                  <div className={`w-2 h-2 rounded-full ${logs.length > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></div>
-                 <span className="text-[10px] text-slate-500 font-mono uppercase tracking-widest">Modulo Operativo Attivo</span>
+                 <span className="text-[10px] text-slate-500 font-mono uppercase tracking-widest">Flusso Dati Operativo</span>
               </div>
               <button 
                 onClick={exportToExcel} 
@@ -234,10 +249,10 @@ const App: React.FC = () => {
               <table className="w-full text-left text-[11px] border-collapse">
                 <thead className="sticky top-0 bg-slate-900 border-b border-sky-500/20 z-10">
                   <tr className="text-sky-500/70 font-orbitron uppercase">
-                    <th className="px-4 py-3">Data Ispezione</th>
+                    <th className="px-4 py-3">Data</th>
                     <th className="px-4 py-3">Ora</th>
-                    <th className="px-4 py-3">Punto / Tag</th>
-                    <th className="px-4 py-3 text-right">Origine</th>
+                    <th className="px-4 py-3">Tag Ispezione</th>
+                    <th className="px-4 py-3 text-right">Fonte</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -249,7 +264,7 @@ const App: React.FC = () => {
                         <td className="px-4 py-2 text-slate-200">{l.tag}</td>
                         <td className="px-4 py-2 text-right">
                           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${l.isGenerated ? 'text-emerald-400 bg-emerald-400/10' : 'text-sky-400 bg-sky-400/10'}`}>
-                            {l.isGenerated ? 'SISTEMA' : 'PATTUGLIA'}
+                            {l.isGenerated ? 'AUTO' : 'REAL'}
                           </span>
                         </td>
                       </tr>
@@ -258,7 +273,7 @@ const App: React.FC = () => {
                     <tr>
                       <td colSpan={4} className="px-4 py-32 text-center opacity-30">
                         <i className="fas fa-terminal text-4xl mb-4 block"></i>
-                        <p className="font-orbitron text-[10px] uppercase tracking-widest">Caricare file TXT per iniziare...</p>
+                        <p className="font-orbitron text-[10px] uppercase tracking-widest">Carica file TXT per visualizzare i dettagli...</p>
                       </td>
                     </tr>
                   )}
