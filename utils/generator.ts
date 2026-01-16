@@ -35,13 +35,14 @@ export const generateMissingData = (
     tagIntervalMin, tagIntervalMax
   } = config;
 
-  // Partiamo con i log esistenti (reali) che non devono essere toccati
+  // Risultato finale inizializzato con i log reali (se presenti)
   let finalLogs: PatrolLog[] = [...existingLogs.map(l => ({ ...l, isGenerated: false }))];
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-  // Determinazione dei tag da utilizzare
+  // Determinazione dei nomi dei tag: usa quelli del file o i nomi di default
   const uniqueTagsInFile = Array.from(new Set(existingLogs.map(l => l.tag)));
   const baseTagNames = uniqueTagsInFile.length > 0 ? uniqueTagsInFile : config.tagNames;
+  // Prendiamo esattamente il numero di tag configurato
   const targetTags = baseTagNames.slice(0, tagsPerSite);
 
   for (let d = 1; d <= daysInMonth; d++) {
@@ -57,21 +58,20 @@ export const generateMissingData = (
         shiftEndAbs += (24 * 60);
       }
 
-      // 1. Identifichiamo i log reali in questo turno
+      // 1. Identifichiamo i log reali già caricati in questo turno
       const logsInShift = finalLogs.filter(l => {
         const logAbs = getAbsoluteMinutes(l.date, l.time);
-        // Tolleranza per log che iniziano poco prima del turno
-        return logAbs >= (shiftStartAbs - 60) && logAbs <= (shiftEndAbs + 60) && !l.isGenerated;
+        return logAbs >= (shiftStartAbs - 30) && logAbs <= (shiftEndAbs + 30) && !l.isGenerated;
       }).sort((a, b) => getAbsoluteMinutes(a.date, a.time) - getAbsoluteMinutes(b.date, b.time));
 
-      // 2. Raggruppiamo i log reali in giri esistenti
+      // 2. Raggruppiamo i reali in "giri" (se presenti)
       const roundsFound: PatrolLog[][] = [];
       if (logsInShift.length > 0) {
         let currentGroup: PatrolLog[] = [logsInShift[0]];
         for (let i = 1; i < logsInShift.length; i++) {
           const diff = getAbsoluteMinutes(logsInShift[i].date, logsInShift[i].time) - 
                        getAbsoluteMinutes(logsInShift[i-1].date, logsInShift[i-1].time);
-          if (diff > 45) { // Se passa più di 45 min, è un altro giro
+          if (diff > 40) {
             roundsFound.push(currentGroup);
             currentGroup = [];
           }
@@ -80,16 +80,14 @@ export const generateMissingData = (
         roundsFound.push(currentGroup);
       }
 
-      // 3. COMPLETAMENTO GIRI ESISTENTI (Senza sovrascrivere i reali)
+      // 3. Completamento dei giri esistenti (se mancano dei tag in un giro iniziato)
       roundsFound.forEach(round => {
         const tagsInRound = new Set(round.map(l => l.tag));
-        // Prendiamo l'ultimo orario del giro esistente per continuare da lì
         const lastLog = round[round.length - 1];
         let timeCursor = getAbsoluteMinutes(lastLog.date, lastLog.time);
 
         targetTags.forEach(tagName => {
           if (!tagsInRound.has(tagName)) {
-            // Aggiungiamo solo i tag che mancano nel giro
             timeCursor += getRandomInt(tagIntervalMin, tagIntervalMax);
             const tagDate = new Date(timeCursor * 60 * 1000);
             finalLogs.push({
@@ -102,26 +100,26 @@ export const generateMissingData = (
         });
       });
 
-      // 4. GENERAZIONE NUOVI GIRI (Se quelli reali sono meno di quelli richiesti)
+      // 4. Generazione giri mancanti (se i reali sono meno di quelli richiesti)
       const missingRoundsCount = Math.max(0, roundsPerShift - roundsFound.length);
       if (missingRoundsCount > 0) {
-        // Cerchiamo uno spazio libero nel turno
-        let nextRoundStartAbs = shiftStartAbs + getRandomInt(30, 90);
+        // Calcoliamo una finestra temporale per distribuire i giri
+        let nextRoundStartAbs = shiftStartAbs + getRandomInt(20, 40);
 
         for (let r = 0; r < missingRoundsCount; r++) {
-          // Evitiamo sovrapposizioni con giri reali o appena generati
+          // Verifica sovrapposizione
           const overlap = finalLogs.some(l => {
             const abs = getAbsoluteMinutes(l.date, l.time);
-            return Math.abs(nextRoundStartAbs - abs) < 120;
+            return Math.abs(nextRoundStartAbs - abs) < 60; 
           });
 
           if (overlap) {
-            nextRoundStartAbs += 150;
-            if (nextRoundStartAbs > shiftEndAbs - 30) break;
+            nextRoundStartAbs += 80;
+            if (nextRoundStartAbs > shiftEndAbs - 20) break;
             r--; continue;
           }
 
-          if (nextRoundStartAbs > shiftEndAbs - 30) break;
+          if (nextRoundStartAbs > shiftEndAbs - 20) break;
 
           let tagCursor = nextRoundStartAbs;
           targetTags.forEach(tagName => {
@@ -135,17 +133,17 @@ export const generateMissingData = (
             tagCursor += getRandomInt(tagIntervalMin, tagIntervalMax);
           });
 
-          nextRoundStartAbs += (120 + getRandomInt(60, 120));
+          // Spaziatura tra la fine di un giro e l'inizio del prossimo
+          nextRoundStartAbs += (100 + getRandomInt(20, 50));
         }
       }
     });
   }
 
-  // Deduplicazione finale e ordinamento
+  // Rimuovi duplicati (priorità ai REALI) e ordina
   const uniqueMap = new Map<string, PatrolLog>();
   finalLogs.forEach(l => {
     const key = `${l.date}_${l.time.substring(0, 5)}_${l.tag}`;
-    // Preferiamo sempre il dato reale se esiste un duplicato generato
     if (!uniqueMap.has(key) || !l.isGenerated) {
       uniqueMap.set(key, l);
     }

@@ -17,7 +17,7 @@ const Card: React.FC<{ children: React.ReactNode, title?: string, icon?: string,
 );
 
 const App: React.FC = () => {
-  const [logs, setLogs] = useState< PatrolLog[]>([]);
+  const [logs, setLogs] = useState<PatrolLog[]>([]);
   const [config, setConfig] = useState<SiteConfig>({
     month: new Date().getMonth(),
     year: new Date().getFullYear(),
@@ -29,7 +29,7 @@ const App: React.FC = () => {
     nightEnd: "06:00",
     dayStart: "08:00",
     dayEnd: "17:00",
-    tagNames: Array.from({ length: 16 }, (_, i) => `Punto ${i + 1}`),
+    tagNames: Array.from({ length: 32 }, (_, i) => `Punto ${i + 1}`),
     tagIntervalMin: 1,
     tagIntervalMax: 3
   });
@@ -46,7 +46,7 @@ const App: React.FC = () => {
         }
       }
     }
-  }, [logs.length > 0 && logs.filter(l => !l.isGenerated).length > 0]);
+  }, [logs.length]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -57,9 +57,11 @@ const App: React.FC = () => {
       const content = event.target?.result as string;
       const parsedLogs = parsePatrolFile(content);
       if (parsedLogs.length === 0) {
-        alert("Errore: Nessun dato valido trovato. Il sistema ha filtrato i messaggi automatici e di sistema.");
+        setAiSummary("File caricato ma nessun dato reale trovato. Il sistema genererà i dati da zero.");
+        setLogs([]);
       } else {
         setLogs(parsedLogs);
+        setAiSummary(`Caricati ${parsedLogs.length} passaggi reali.`);
       }
     };
     reader.readAsText(file);
@@ -67,18 +69,19 @@ const App: React.FC = () => {
   };
 
   const processReport = async () => {
-    if (logs.length === 0) {
-      alert("Carica prima il file TXT delle ispezioni.");
-      return;
-    }
-    
     setIsProcessing(true);
     await new Promise(r => setTimeout(r, 1000));
     
     try {
+      // Ora generateMissingData viene chiamata anche se logs è vuoto
       const completeLogs = generateMissingData(logs, config);
       setLogs(completeLogs);
-      setAiSummary(`Elaborazione completata. Il sistema ha filtrato i messaggi di "Arrivo sul posto" e ha compattato i tempi tra i tag tra ${config.tagIntervalMin} e ${config.tagIntervalMax} minuti.`);
+      
+      if (logs.length === 0) {
+        setAiSummary(`Generazione completa per ${new Date(config.year, config.month).toLocaleString('it-IT', { month: 'long', year: 'numeric' })}: creati tutti i turni da zero.`);
+      } else {
+        setAiSummary(`Integrazione completata. I dati reali sono stati mantenuti e quelli mancanti sono stati aggiunti.`);
+      }
     } catch (err) {
       console.error(err);
       setAiSummary("Errore durante l'elaborazione dei dati.");
@@ -87,13 +90,19 @@ const App: React.FC = () => {
     }
   };
 
+  const clearData = () => {
+    setLogs([]);
+    setAiSummary("Dati resettati. Pronto per una nuova generazione.");
+  };
+
   const exportToExcel = () => {
     // @ts-ignore
     if (!window.XLSX) return;
     const data = logs.map(l => ({ 
       Data: l.date.split('-').reverse().join('/'), 
       Ora: l.time.substring(0, 5), 
-      'Punto Ispezione': l.tag 
+      'Punto Ispezione': l.tag,
+      'Fonte': l.isGenerated ? 'AUTOMATICO' : 'REALE'
     }));
     // @ts-ignore
     const ws = window.XLSX.utils.json_to_sheet(data);
@@ -102,7 +111,7 @@ const App: React.FC = () => {
     // @ts-ignore
     window.XLSX.utils.book_append_sheet(wb, ws, "Report_Pattuglia");
     // @ts-ignore
-    window.XLSX.writeFile(wb, `Report_${config.year}_${config.month + 1}.xlsx`);
+    window.XLSX.writeFile(wb, `Report_PatrolGuard_${config.year}_${config.month + 1}.xlsx`);
   };
 
   const stats = useMemo(() => {
@@ -133,11 +142,17 @@ const App: React.FC = () => {
           </label>
           <button 
             onClick={processReport}
-            disabled={isProcessing || logs.length === 0}
-            className={`px-6 py-3 rounded-full flex items-center font-bold uppercase text-xs tracking-widest transition-all duration-300 ${isProcessing || logs.length === 0 ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed' : 'bg-transparent border border-sky-400 text-sky-400 hover:bg-sky-400/10'}`}
+            disabled={isProcessing}
+            className={`px-6 py-3 rounded-full flex items-center font-bold uppercase text-xs tracking-widest transition-all duration-300 ${isProcessing ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed' : 'bg-transparent border border-sky-400 text-sky-400 hover:bg-sky-400/10'}`}
           >
-            <i className={`fas ${isProcessing ? 'fa-spinner fa-spin' : 'fa-bolt'} mr-2`}></i> 2. Elabora Report
+            <i className={`fas ${isProcessing ? 'fa-spinner fa-spin' : 'fa-bolt'} mr-2`}></i> 
+            {logs.length === 0 ? "2. Genera Tutto" : "2. Elabora Report"}
           </button>
+          {logs.length > 0 && (
+            <button onClick={clearData} className="text-slate-500 hover:text-red-400 transition-colors p-2">
+              <i className="fas fa-trash-alt"></i>
+            </button>
+          )}
         </div>
       </header>
 
@@ -163,7 +178,7 @@ const App: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] text-sky-400/60 uppercase font-bold block mb-2">Giri: {config.roundsPerShift}</label>
-                  <input type="range" min="1" max="10" value={config.roundsPerShift} onChange={(e) => setConfig({...config, roundsPerShift: parseInt(e.target.value)})} className="w-full accent-sky-500" />
+                  <input type="range" min="1" max="12" value={config.roundsPerShift} onChange={(e) => setConfig({...config, roundsPerShift: parseInt(e.target.value)})} className="w-full accent-sky-500" />
                 </div>
                 <div>
                   <label className="text-[10px] text-sky-400/60 uppercase font-bold block mb-2">Tag: {config.tagsPerSite}</label>
@@ -180,7 +195,7 @@ const App: React.FC = () => {
                   </div>
                   <div className="flex-1">
                     <span className="text-[9px] text-sky-300/50 block">MAX: {config.tagIntervalMax}</span>
-                    <input type="range" min="1" max="10" value={config.tagIntervalMax} onChange={(e) => setConfig({...config, tagIntervalMax: Math.max(config.tagIntervalMin, parseInt(e.target.value))})} className="w-full accent-emerald-500" />
+                    <input type="range" min="1" max="15" value={config.tagIntervalMax} onChange={(e) => setConfig({...config, tagIntervalMax: Math.max(config.tagIntervalMin, parseInt(e.target.value))})} className="w-full accent-emerald-500" />
                   </div>
                 </div>
               </div>
@@ -209,7 +224,7 @@ const App: React.FC = () => {
 
           <Card title="Stato Sistema" icon="fas fa-microchip">
             <p className="text-sky-300/80 italic text-xs leading-relaxed">
-              {aiSummary || "Pronto per l'analisi dei dati di campo."}
+              {aiSummary || "Nessun dato caricato. Premi 'Genera Tutto' per creare un report mensile completo basato sulla configurazione."}
             </p>
           </Card>
         </div>
@@ -273,7 +288,11 @@ const App: React.FC = () => {
                     <tr>
                       <td colSpan={4} className="px-4 py-32 text-center opacity-30">
                         <i className="fas fa-terminal text-4xl mb-4 block"></i>
-                        <p className="font-orbitron text-[10px] uppercase tracking-widest">Carica file TXT per visualizzare i dettagli...</p>
+                        <p className="font-orbitron text-[10px] uppercase tracking-widest leading-relaxed">
+                          Nessun dato presente.<br/>
+                          Premi 'Genera Tutto' per creare una ricostruzione completa<br/>
+                          o importa un file TXT per integrare i passaggi esistenti.
+                        </p>
                       </td>
                     </tr>
                   )}
