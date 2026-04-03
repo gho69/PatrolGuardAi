@@ -32,7 +32,7 @@ export const parsePatrolFile = (content: string): PatrolLog[] => {
 
     if (!tagPart) return;
 
-    const cleanTag = tagPart.replace(/:$/, '').trim();
+    const cleanTag = tagPart.replace(/:$/, '').replace(/\s+/g, ' ').trim();
     const lowerTag = cleanTag.toLowerCase();
     
     // FILTRI RIGOROSI: Escludiamo tutto ciò che non è un'ispezione effettiva
@@ -59,7 +59,7 @@ export const parsePatrolFile = (content: string): PatrolLog[] => {
         logs.push({
           date: normalizedDate,
           time: normalizedTime,
-          tag: cleanTag,
+          tag: cleanTag, // Manteniamo il formato originale (es. "Ispezione: 1...")
           isGenerated: false
         });
       }

@@ -21,19 +21,25 @@ const App: React.FC = () => {
   const [config, setConfig] = useState<SiteConfig>({
     month: new Date().getMonth(),
     year: new Date().getFullYear(),
-    roundsPerShift: 3, // Default a 3 per le ispezioni notturne
-    tagsPerSite: 1,    // Default a 1 tag come da screenshot
+    roundsPerShift: 2, // Default a 2 per le ispezioni notturne come richiesto
+    tagsPerSite: 5,    // Default a 5 tag come da screenshot
     nightShiftEnabled: true,
     dayShiftEnabled: false,
     nightStart: "23:00",
     nightEnd: "06:00",
     dayStart: "08:00",
     dayEnd: "18:00",
-    tagNames: ["Ingresso Centrale"],
-    tagIntervalMin: 1,
-    tagIntervalMax: 3,
-    saturdayConfig: { nightEnabled: true, dayEnabled: false, rounds: 3 },
-    sundayConfig: { nightEnabled: true, dayEnabled: false, rounds: 3 }
+    tagNames: [
+      "Ispezione: 1 INGRESSO UFFICI",
+      "Ispezione: 2 VIA GRANAROLO",
+      "Ispezione: 3 WEELNESS",
+      "Ispezione: 4 PERIMETRO CONFINANTE (VICINO)",
+      "Ispezione: 5 RETRO TAGLIO"
+    ],
+    tagIntervalMin: 2,
+    tagIntervalMax: 5,
+    saturdayConfig: { nightEnabled: true, dayEnabled: false, rounds: 2 },
+    sundayConfig: { nightEnabled: true, dayEnabled: false, rounds: 2 }
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [aiSummary, setAiSummary] = useState<string>("");
