@@ -45,11 +45,24 @@ export const generateMissingData = (
 
   // 1. Mappa dei tag per preservare il formato originale
   const tagMap = new Map<string, string>();
+  const isGeneric = (t: string) => {
+    const norm = t.toLowerCase().replace(/[:\s]+/g, ' ').trim();
+    return norm === 'reale' || 
+           norm === 'operatore' || 
+           norm === 'ispezione' ||
+           norm === 'ispezione reale' || 
+           norm === 'ispezione operatore' ||
+           norm.includes('system') || 
+           norm.includes('gps');
+  };
+
   config.tagNames.forEach(t => {
+    if (isGeneric(t)) return;
     const norm = normalizeTag(t);
     if (!tagMap.has(norm)) tagMap.set(norm, t.trim());
   });
   existingLogs.forEach(l => {
+    if (isGeneric(l.tag)) return;
     const norm = normalizeTag(l.tag);
     if (!tagMap.has(norm)) tagMap.set(norm, l.tag.trim());
   });

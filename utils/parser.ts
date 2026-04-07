@@ -16,35 +16,55 @@ export const parsePatrolFile = (content: string): PatrolLog[] => {
     const dateTimePart = parts[1]?.trim();
     
     let tagPart = "";
-    const inspectionPart = parts.find(p => p.toLowerCase().includes('ispezione:'));
     
-    if (inspectionPart) {
-      tagPart = inspectionPart.trim();
-    } else {
-      for (let i = 2; i < parts.length; i++) {
-        const p = parts[i].trim().replace(/:$/, ''); 
-        if (p.length > 3 && isNaN(Number(p)) && !p.toLowerCase().includes('system')) {
-          tagPart = p;
-          break;
-        }
+    // Cerchiamo tra tutte le parti dal terzo elemento in poi
+    for (let i = 2; i < parts.length; i++) {
+      const p = parts[i].trim();
+      if (!p || p.length < 3) continue;
+      
+      // Normalizziamo per il controllo: rimuoviamo i due punti e gli spazi multipli
+      const norm = p.toLowerCase().replace(/[:\s]+/g, ' ').trim();
+      
+      // Verifichiamo se è un messaggio di stato generico
+      const isStatus = 
+        norm === 'reale' || 
+        norm === 'operatore' || 
+        norm === 'ispezione' ||
+        norm === 'ispezione reale' || 
+        norm === 'ispezione operatore' ||
+        norm.includes('system') ||
+        norm.includes('gps') ||
+        norm.includes('inizio giro') ||
+        norm.includes('fine giro') ||
+        norm.includes('automatico') ||
+        norm.includes('pattuglia');
+        
+      if (!isStatus && isNaN(Number(p))) {
+        tagPart = p;
+        break;
       }
     }
 
     if (!tagPart) return;
 
     const cleanTag = tagPart.replace(/:$/, '').replace(/\s+/g, ' ').trim();
-    const lowerTag = cleanTag.toLowerCase();
+    const lowerTagNormalized = cleanTag.toLowerCase().replace(/[:\s]+/g, ' ').trim();
     
     // FILTRI RIGOROSI: Escludiamo tutto ciò che non è un'ispezione effettiva
     const isInvalid = 
       !isNaN(Number(cleanTag)) || 
-      lowerTag.includes('fine giro') || 
-      lowerTag.includes('inizio giro') || 
-      lowerTag.includes('system') || 
-      lowerTag.includes('arrivo sul posto') ||
-      lowerTag.includes('automatico') ||
-      lowerTag.includes('pattuglia') ||
-      lowerTag.includes('gps') ||
+      lowerTagNormalized === 'reale' ||
+      lowerTagNormalized === 'operatore' ||
+      lowerTagNormalized === 'ispezione' ||
+      lowerTagNormalized === 'ispezione reale' ||
+      lowerTagNormalized === 'ispezione operatore' ||
+      lowerTagNormalized.includes('fine giro') || 
+      lowerTagNormalized.includes('inizio giro') || 
+      lowerTagNormalized.includes('system') || 
+      lowerTagNormalized.includes('arrivo sul posto') ||
+      lowerTagNormalized.includes('automatico') ||
+      lowerTagNormalized.includes('pattuglia') ||
+      lowerTagNormalized.includes('gps') ||
       cleanTag.length < 4;
 
     if (isInvalid) return;

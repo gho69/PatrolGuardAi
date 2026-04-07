@@ -110,7 +110,7 @@ const App: React.FC = () => {
       Data: l.date.split('-').reverse().join('/'), 
       Ora: l.time.substring(0, 5), 
       'Punto Ispezione': l.tag,
-      'Fonte': l.isGenerated ? 'SISTEMA' : 'OPERATORE'
+      'Fonte': l.isGenerated ? 'SISTEMA' : 'REALE'
     }));
     // @ts-ignore
     const ws = window.XLSX.utils.json_to_sheet(data);
