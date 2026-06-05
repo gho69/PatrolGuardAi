@@ -8,7 +8,8 @@ export interface PatrolLog {
 
 export interface DayConfig {
   nightEnabled: boolean;
-  dayEnabled: boolean;
+  day1Enabled: boolean;
+  day2Enabled: boolean;
   rounds: number;
 }
 
@@ -18,11 +19,14 @@ export interface SiteConfig {
   roundsPerShift: number;
   tagsPerSite: number;
   nightShiftEnabled: boolean;
-  dayShiftEnabled: boolean;
+  dayShift1Enabled: boolean;
+  dayShift2Enabled: boolean;
   nightStart: string;
   nightEnd: string;
-  dayStart: string;
-  dayEnd: string;
+  dayShift1Start: string;
+  dayShift1End: string;
+  dayShift2Start: string;
+  dayShift2End: string;
   tagNames: string[];
   tagIntervalMin: number;
   tagIntervalMax: number;
@@ -30,6 +34,7 @@ export interface SiteConfig {
   saturdayConfig: DayConfig;
   sundayConfig: DayConfig;
 }
+
 
 export interface ReportData {
   logs: PatrolLog[];

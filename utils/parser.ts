@@ -15,18 +15,10 @@ export const parsePatrolFile = (content: string): PatrolLog[] => {
     const parts = trimmed.split(';');
     const dateTimePart = parts[1]?.trim();
     
-    let tagPart = "";
-    
-    // Cerchiamo tra tutte le parti dal terzo elemento in poi
-    for (let i = 2; i < parts.length; i++) {
-      const p = parts[i].trim();
-      if (!p || p.length < 3) continue;
-      
-      // Normalizziamo per il controllo: rimuoviamo i due punti e gli spazi multipli
-      const norm = p.toLowerCase().replace(/[:\s]+/g, ' ').trim();
-      
-      // Verifichiamo se è un messaggio di stato generico
-      const isStatus = 
+    // Funzione helper per verificare se una stringa è un semplice status o un segnaposto generico
+    const isStatusVal = (val: string): boolean => {
+      const norm = val.toLowerCase().replace(/[:\s]+/g, ' ').trim();
+      return (
         norm === 'reale' || 
         norm === 'operatore' || 
         norm === 'ispezione' ||
@@ -37,12 +29,43 @@ export const parsePatrolFile = (content: string): PatrolLog[] => {
         norm.includes('inizio giro') ||
         norm.includes('fine giro') ||
         norm.includes('automatico') ||
-        norm.includes('pattuglia');
-        
-      if (!isStatus && isNaN(Number(p))) {
-        tagPart = p;
-        break;
+        norm.includes('pattuglia') ||
+        norm.includes('sospes') ||
+        norm.includes('ripres') ||
+        norm.includes('annullat') ||
+        norm.includes('fallit') ||
+        norm.includes('incomplet') ||
+        norm.includes('parzial') ||
+        norm.includes('allarme') ||
+        norm.includes('anomalia') ||
+        norm.includes('guasto') ||
+        norm.includes('manutenzione') ||
+        norm.includes('batteria') ||
+        norm.includes('alimentazione') ||
+        norm.includes('test') ||
+        !isNaN(Number(val))
+      );
+    };
+
+    let tagPart = "";
+    
+    // Identificazione intelligente della colonna del tag basandoci sul numero totale di colonne.
+    // Tipici formati di linea:
+    // 5+ parti -> 0: ID, 1: Data Ora, 2: Tipo Evento (Reale), 3: Nome Operatore, 4: Nome Tag
+    // 4 parti  -> 0: ID, 1: Data Ora, 2: Tipo Evento, 3: Nome Tag
+    // 3 parti  -> 0: ID, 1: Data Ora, 2: Nome Tag
+    if (parts.length >= 5) {
+      tagPart = parts[4]?.trim() || "";
+      if (!tagPart || isStatusVal(tagPart)) {
+        tagPart = parts[3]?.trim() || "";
       }
+    } else if (parts.length === 4) {
+      tagPart = parts[3]?.trim() || "";
+      if (!tagPart || isStatusVal(tagPart)) {
+        tagPart = parts[2]?.trim() || "";
+      }
+    } else if (parts.length === 3) {
+      tagPart = parts[2]?.trim() || "";
     }
 
     if (!tagPart) return;
@@ -52,19 +75,8 @@ export const parsePatrolFile = (content: string): PatrolLog[] => {
     
     // FILTRI RIGOROSI: Escludiamo tutto ciò che non è un'ispezione effettiva
     const isInvalid = 
-      !isNaN(Number(cleanTag)) || 
-      lowerTagNormalized === 'reale' ||
-      lowerTagNormalized === 'operatore' ||
-      lowerTagNormalized === 'ispezione' ||
-      lowerTagNormalized === 'ispezione reale' ||
-      lowerTagNormalized === 'ispezione operatore' ||
-      lowerTagNormalized.includes('fine giro') || 
-      lowerTagNormalized.includes('inizio giro') || 
-      lowerTagNormalized.includes('system') || 
+      isStatusVal(cleanTag) ||
       lowerTagNormalized.includes('arrivo sul posto') ||
-      lowerTagNormalized.includes('automatico') ||
-      lowerTagNormalized.includes('pattuglia') ||
-      lowerTagNormalized.includes('gps') ||
       cleanTag.length < 4;
 
     if (isInvalid) return;
