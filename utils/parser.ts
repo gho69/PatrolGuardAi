@@ -77,6 +77,11 @@ export const parsePatrolFile = (content: string): PatrolLog[] => {
     const isInvalid = 
       isStatusVal(cleanTag) ||
       lowerTagNormalized.includes('arrivo sul posto') ||
+      lowerTagNormalized.includes('fotografia') ||
+      lowerTagNormalized.includes('foto') ||
+      lowerTagNormalized.includes('prima visualizzazione') ||
+      lowerTagNormalized.includes('chiusura generica') ||
+      lowerTagNormalized.includes('*fast*') ||
       cleanTag.length < 4;
 
     if (isInvalid) return;

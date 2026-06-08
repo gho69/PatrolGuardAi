@@ -84,6 +84,7 @@ const App: React.FC = () => {
     saturdayConfig: { nightEnabled: true, day1Enabled: false, day2Enabled: false, rounds: 1 },
     sundayConfig: { nightEnabled: true, day1Enabled: false, day2Enabled: false, rounds: 1 }
   });
+  const [autoDetectTags, setAutoDetectTags] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [aiSummary, setAiSummary] = useState<string>("");
 
@@ -116,18 +117,22 @@ const App: React.FC = () => {
         // Estrazione intelligente e dinamica dei tag reali inseriti nel file
         const uniqueRealTags = Array.from(new Set(parsedLogs.map(l => l.tag)));
         if (uniqueRealTags.length > 0) {
-          setConfig(prev => {
-            const updatedTagNames = [...prev.tagNames];
-            uniqueRealTags.forEach((tag, idx) => {
-              updatedTagNames[idx] = tag;
+          if (autoDetectTags) {
+            setConfig(prev => {
+              const updatedTagNames = [...prev.tagNames];
+              uniqueRealTags.forEach((tag, idx) => {
+                updatedTagNames[idx] = tag;
+              });
+              return {
+                ...prev,
+                tagNames: updatedTagNames,
+                tagsPerSite: uniqueRealTags.length
+              };
             });
-            return {
-              ...prev,
-              tagNames: updatedTagNames,
-              tagsPerSite: uniqueRealTags.length
-            };
-          });
-          setAiSummary(`Caricati ${parsedLogs.length} passaggi reali. Rilevati in automatico ${uniqueRealTags.length} tag reali. Pronto per l'integrazione.`);
+            setAiSummary(`Caricati ${parsedLogs.length} passaggi reali. Rilevati in automatico ${uniqueRealTags.length} tag reali. Pronto per l'integrazione.`);
+          } else {
+            setAiSummary(`Caricati ${parsedLogs.length} passaggi reali. Configurazione client personalizzata mantenuta invariata (${config.tagsPerSite} tag configurati).`);
+          }
         } else {
           setAiSummary(`Caricati ${parsedLogs.length} passaggi reali.`);
         }
@@ -269,12 +274,26 @@ const App: React.FC = () => {
                     <span>Parametri Ispezioni</span>
                     <i className="fas fa-tools text-sky-400/50"></i>
                   </h3>
+                  {/* Rilevatore Automatico Tag */}
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-sky-500/5 hover:bg-sky-500/10 border border-sky-500/10 transition-all select-none">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Ricompatta/Rileva automatico da file</span>
+                    <input 
+                      type="checkbox" 
+                      checked={autoDetectTags} 
+                      onChange={(e) => setAutoDetectTags(e.target.checked)} 
+                      className="accent-sky-500 w-4 h-4 cursor-pointer" 
+                    />
+                  </div>
+
                   <NumericStepper 
                     label="Tag per Giro" 
                     value={config.tagsPerSite} 
                     min={1} 
                     max={20} 
-                    onChange={(val) => setConfig({...config, tagsPerSite: val})} 
+                    onChange={(val) => {
+                      setAutoDetectTags(false);
+                      setConfig({...config, tagsPerSite: val});
+                    }} 
                   />
                   
                   {/* GENERATORE / CONFIGURATORE DINAMICO NOMI TAG */}
@@ -290,6 +309,7 @@ const App: React.FC = () => {
                               type="text" 
                               value={currentVal} 
                               onChange={(e) => {
+                                setAutoDetectTags(false);
                                 const newTagNames = [...config.tagNames];
                                 newTagNames[index] = e.target.value;
                                 setConfig(prev => ({ ...prev, tagNames: newTagNames }));
