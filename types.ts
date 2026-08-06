@@ -13,6 +13,15 @@ export interface DayConfig {
   rounds: number;
 }
 
+export interface CustomRoundSlot {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  enabled: boolean;
+  daysFilter?: 'all' | 'weekdays' | 'weekend';
+}
+
 export interface SiteConfig {
   month: number;
   year: number;
@@ -33,6 +42,9 @@ export interface SiteConfig {
   // Nuove opzioni weekend
   saturdayConfig: DayConfig;
   sundayConfig: DayConfig;
+  // Fasce orarie specifiche per singoli giri ed aperture
+  customRoundSlotsEnabled?: boolean;
+  customRoundSlots?: CustomRoundSlot[];
 }
 
 

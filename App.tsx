@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { parsePatrolFile } from './utils/parser';
 import { generateMissingData } from './utils/generator';
-import { PatrolLog, SiteConfig, ReportData, DayConfig } from './types';
+import { PatrolLog, SiteConfig, ReportData, DayConfig, CustomRoundSlot } from './types';
 
 const Card: React.FC<{ children: React.ReactNode, title?: string, icon?: string, className?: string }> = ({ children, title, icon, className = "" }) => (
   <div className={`glass p-6 rounded-2xl neon-border transition-all duration-300 ${className}`}>
@@ -60,7 +60,7 @@ const NumericStepper: React.FC<{
 
 const App: React.FC = () => {
   const [logs, setLogs] = useState<PatrolLog[]>([]);
-  const [activeTab, setActiveTab] = useState<'base' | 'shifts' | 'weekend'>('base');
+  const [activeTab, setActiveTab] = useState<'base' | 'shifts' | 'slots' | 'weekend'>('base');
   const [config, setConfig] = useState<SiteConfig>({
     month: new Date().getMonth(),
     year: new Date().getFullYear(),
@@ -82,8 +82,53 @@ const App: React.FC = () => {
     tagIntervalMin: 2,
     tagIntervalMax: 5,
     saturdayConfig: { nightEnabled: true, day1Enabled: false, day2Enabled: false, rounds: 1 },
-    sundayConfig: { nightEnabled: true, day1Enabled: false, day2Enabled: false, rounds: 1 }
+    sundayConfig: { nightEnabled: true, day1Enabled: false, day2Enabled: false, rounds: 1 },
+    customRoundSlotsEnabled: false,
+    customRoundSlots: [
+      { id: '1', name: '1° Giro Notturno', startTime: '00:00', endTime: '01:00', enabled: true, daysFilter: 'all' },
+      { id: '2', name: '2° Giro Notturno', startTime: '02:00', endTime: '03:00', enabled: true, daysFilter: 'all' },
+      { id: '3', name: 'Apertura Obbligatoria', startTime: '04:30', endTime: '05:00', enabled: true, daysFilter: 'all' }
+    ]
   });
+
+  const addCustomSlot = () => {
+    setConfig(prev => {
+      const slots = prev.customRoundSlots || [];
+      const newSlot: CustomRoundSlot = {
+        id: Date.now().toString(),
+        name: `Giro ${slots.length + 1}`,
+        startTime: '00:00',
+        endTime: '01:00',
+        enabled: true,
+        daysFilter: 'all'
+      };
+      return {
+        ...prev,
+        customRoundSlotsEnabled: true,
+        customRoundSlots: [...slots, newSlot]
+      };
+    });
+  };
+
+  const updateCustomSlot = (id: string, field: keyof CustomRoundSlot, value: any) => {
+    setConfig(prev => {
+      const slots = prev.customRoundSlots || [];
+      return {
+        ...prev,
+        customRoundSlots: slots.map(s => s.id === id ? { ...s, [field]: value } : s)
+      };
+    });
+  };
+
+  const removeCustomSlot = (id: string) => {
+    setConfig(prev => {
+      const slots = prev.customRoundSlots || [];
+      return {
+        ...prev,
+        customRoundSlots: slots.filter(s => s.id !== id)
+      };
+    });
+  };
   const [autoDetectTags, setAutoDetectTags] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [aiSummary, setAiSummary] = useState<string>("");
@@ -225,28 +270,35 @@ const App: React.FC = () => {
       <main className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 flex flex-col gap-6">
           <Card className="p-4" title="Configurazione Client" icon="fas fa-sliders">
-            {/* TASTATURA DI COMMUTAZIONE PARAMETRI - Alternativa ricca e ordinata rispetto all'interfaccia a riga singola */}
-            <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-900/80 rounded-xl border border-sky-500/10 mb-6">
+            {/* TASTATURA DI COMMUTAZIONE PARAMETRI */}
+            <div className="grid grid-cols-4 gap-1 p-1 bg-slate-900/80 rounded-xl border border-sky-500/10 mb-6">
               <button
                 type="button"
                 onClick={() => setActiveTab('base')}
-                className={`cursor-pointer py-2 text-[10px] font-orbitron font-bold uppercase rounded-lg border transition-all text-center ${activeTab === 'base' ? 'bg-sky-500/15 border-sky-400/40 text-sky-300' : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200'}`}
+                className={`cursor-pointer py-2 text-[9px] font-orbitron font-bold uppercase rounded-lg border transition-all text-center ${activeTab === 'base' ? 'bg-sky-500/15 border-sky-400/40 text-sky-300' : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200'}`}
               >
-                <i className="fas fa-cog mr-1"></i> Base
+                <i className="fas fa-cog block sm:inline mb-0.5 sm:mb-0 sm:mr-1"></i> Base
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('shifts')}
-                className={`cursor-pointer py-2 text-[10px] font-orbitron font-bold uppercase rounded-lg border transition-all text-center ${activeTab === 'shifts' ? 'bg-sky-500/15 border-sky-400/40 text-sky-300' : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200'}`}
+                className={`cursor-pointer py-2 text-[9px] font-orbitron font-bold uppercase rounded-lg border transition-all text-center ${activeTab === 'shifts' ? 'bg-sky-500/15 border-sky-400/40 text-sky-300' : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200'}`}
               >
-                <i className="fas fa-clock mr-1"></i> Turni
+                <i className="fas fa-clock block sm:inline mb-0.5 sm:mb-0 sm:mr-1"></i> Turni
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('slots')}
+                className={`cursor-pointer py-2 text-[9px] font-orbitron font-bold uppercase rounded-lg border transition-all text-center ${activeTab === 'slots' ? 'bg-sky-500/15 border-sky-400/40 text-sky-300' : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200'}`}
+              >
+                <i className="fas fa-list-ol block sm:inline mb-0.5 sm:mb-0 sm:mr-1"></i> Fasce
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('weekend')}
-                className={`cursor-pointer py-2 text-[10px] font-orbitron font-bold uppercase rounded-lg border transition-all text-center ${activeTab === 'weekend' ? 'bg-sky-500/15 border-sky-400/40 text-sky-300' : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200'}`}
+                className={`cursor-pointer py-2 text-[9px] font-orbitron font-bold uppercase rounded-lg border transition-all text-center ${activeTab === 'weekend' ? 'bg-sky-500/15 border-sky-400/40 text-sky-300' : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200'}`}
               >
-                <i className="fas fa-calendar-alt mr-1"></i> Weekend
+                <i className="fas fa-calendar-alt block sm:inline mb-0.5 sm:mb-0 sm:mr-1"></i> WEnd
               </button>
             </div>
 
@@ -475,6 +527,119 @@ const App: React.FC = () => {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {activeTab === 'slots' && (
+              <div className="space-y-4 animate-fadeIn">
+                <h3 className="text-[10px] font-bold text-sky-300 uppercase tracking-widest border-b border-sky-500/10 pb-1.5 flex justify-between items-center mb-1">
+                  <span>Fasce Orarie Specifiche / Aperture</span>
+                  <i className="fas fa-list-ol text-sky-400/50"></i>
+                </h3>
+
+                {/* Switch Attivazione Fasce Specifiche */}
+                <div className="flex items-center justify-between p-3 rounded-xl bg-sky-500/10 border border-sky-500/20 transition-all select-none">
+                  <div className="pr-2">
+                    <span className="text-xs font-bold text-sky-200 block">Attiva Fasce Giri Specifici</span>
+                    <span className="text-[9px] text-slate-400 block leading-tight mt-0.5">
+                      Genera i singoli giri rispettando le fasce ed orari qui definiti
+                    </span>
+                  </div>
+                  <input 
+                    type="checkbox" 
+                    checked={config.customRoundSlotsEnabled ?? false} 
+                    onChange={e => setConfig({...config, customRoundSlotsEnabled: e.target.checked})} 
+                    className="accent-sky-500 w-5 h-5 cursor-pointer shrink-0" 
+                  />
+                </div>
+
+                {config.customRoundSlotsEnabled ? (
+                  <div className="space-y-3 pt-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">
+                        Fasce Orarie Configurate ({config.customRoundSlots?.length || 0})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={addCustomSlot}
+                        className="cursor-pointer text-[10px] bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-400/30 font-bold py-1 px-2.5 rounded-lg transition-all flex items-center gap-1"
+                      >
+                        <i className="fas fa-plus text-[9px]"></i> Nuova Fascia
+                      </button>
+                    </div>
+
+                    <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+                      {config.customRoundSlots?.map((slot) => (
+                        <div key={slot.id} className="bg-slate-900/90 p-3 rounded-xl border border-sky-500/15 space-y-2.5 shadow-sm">
+                          <div className="flex items-center justify-between gap-2">
+                            <input 
+                              type="text" 
+                              value={slot.name} 
+                              onChange={e => updateCustomSlot(slot.id, 'name', e.target.value)}
+                              className="bg-black/40 border border-sky-500/20 rounded-lg px-2.5 py-1 text-xs text-sky-200 font-bold outline-none flex-1 focus:border-sky-400"
+                              placeholder="Nome Giro / Apertura"
+                            />
+                            <div className="flex items-center gap-2">
+                              <input 
+                                type="checkbox" 
+                                checked={slot.enabled} 
+                                onChange={e => updateCustomSlot(slot.id, 'enabled', e.target.checked)}
+                                className="accent-sky-500 w-4 h-4 cursor-pointer"
+                                title="Abilita / Disabilita questa fascia"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeCustomSlot(slot.id)}
+                                className="text-slate-500 hover:text-red-400 text-xs p-1 transition-colors cursor-pointer"
+                                title="Elimina fascia"
+                              >
+                                <i className="fas fa-trash-alt"></i>
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 pt-0.5">
+                            <div>
+                              <label className="text-[8px] text-slate-400 font-bold uppercase block mb-1">Ora Inizio</label>
+                              <input 
+                                type="time" 
+                                value={slot.startTime} 
+                                onChange={e => updateCustomSlot(slot.id, 'startTime', e.target.value)}
+                                className="w-full bg-black/50 border border-sky-500/15 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-sky-400/40"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[8px] text-slate-400 font-bold uppercase block mb-1">Ora Fine / Fissa</label>
+                              <input 
+                                type="time" 
+                                value={slot.endTime} 
+                                onChange={e => updateCustomSlot(slot.id, 'endTime', e.target.value)}
+                                className="w-full bg-black/50 border border-sky-500/15 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-sky-400/40"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-1 border-t border-white/5">
+                            <span className="text-[8px] uppercase font-bold text-slate-400">Giorni:</span>
+                            <select
+                              value={slot.daysFilter || 'all'}
+                              onChange={e => updateCustomSlot(slot.id, 'daysFilter', e.target.value)}
+                              className="bg-black/50 border border-sky-500/15 text-[10px] text-sky-300 font-bold rounded-lg px-2 py-0.5 outline-none cursor-pointer"
+                            >
+                              <option value="all">Tutti i giorni</option>
+                              <option value="weekdays">Solo Lun-Ven</option>
+                              <option value="weekend">Solo Sabato e Domenica</option>
+                            </select>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl bg-black/20 border border-white/5 text-center text-[10px] text-slate-400 italic">
+                    I giri verranno distribuiti automaticamente nei Turni Generali (notturno/diurno). Attiva il selettore sopra per definire fasce specifiche.
+                  </div>
+                )}
               </div>
             )}
 

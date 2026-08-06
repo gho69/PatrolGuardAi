@@ -173,31 +173,59 @@ export const generateMissingData = (
       };
     }
 
-    if (currentDayConfig.nightEnabled) {
-      const startAbs = getAbsoluteMinutes(currentDateStr, nightStart);
-      let endAbs = getAbsoluteMinutes(currentDateStr, nightEnd);
-      const spansMidnight = toMinutes(nightEnd) <= toMinutes(nightStart);
-      if (spansMidnight) endAbs += (24 * 60);
-      const startHour = parseInt(nightStart.split(':')[0]);
-      shiftWindows.push({ startAbs, endAbs, roundsTarget: currentDayConfig.rounds, operationalDateStr: currentDateStr, startHour, spansMidnight });
-    }
+    if (config.customRoundSlotsEnabled && config.customRoundSlots && config.customRoundSlots.length > 0) {
+      // Modalità Fasce Orarie Specifiche per Giro ed Aperture
+      const activeSlots = config.customRoundSlots.filter(s => {
+        if (!s.enabled) return false;
+        if (!s.daysFilter || s.daysFilter === 'all') return true;
+        if (s.daysFilter === 'weekdays') return dayOfWeek >= 1 && dayOfWeek <= 5;
+        if (s.daysFilter === 'weekend') return dayOfWeek === 0 || dayOfWeek === 6;
+        return true;
+      });
 
-    if (currentDayConfig.day1Enabled) {
-      const startAbs = getAbsoluteMinutes(currentDateStr, dayShift1Start);
-      let endAbs = getAbsoluteMinutes(currentDateStr, dayShift1End);
-      const spansMidnight = toMinutes(dayShift1End) <= toMinutes(dayShift1Start);
-      if (spansMidnight) endAbs += (24 * 60);
-      const startHour = parseInt(dayShift1Start.split(':')[0]);
-      shiftWindows.push({ startAbs, endAbs, roundsTarget: currentDayConfig.rounds, operationalDateStr: currentDateStr, startHour, spansMidnight });
-    }
+      activeSlots.forEach(slot => {
+        const startAbs = getAbsoluteMinutes(currentDateStr, slot.startTime);
+        let endAbs = getAbsoluteMinutes(currentDateStr, slot.endTime);
+        const spansMidnight = toMinutes(slot.endTime) < toMinutes(slot.startTime);
+        if (spansMidnight) endAbs += (24 * 60);
+        const startHour = parseInt(slot.startTime.split(':')[0]);
+        shiftWindows.push({
+          startAbs,
+          endAbs,
+          roundsTarget: 1, // ogni fascia specifica rappresenta 1 singolo giro/apertura
+          operationalDateStr: currentDateStr,
+          startHour,
+          spansMidnight
+        });
+      });
+    } else {
+      // Modalità Turni Generali Standard
+      if (currentDayConfig.nightEnabled) {
+        const startAbs = getAbsoluteMinutes(currentDateStr, nightStart);
+        let endAbs = getAbsoluteMinutes(currentDateStr, nightEnd);
+        const spansMidnight = toMinutes(nightEnd) <= toMinutes(nightStart);
+        if (spansMidnight) endAbs += (24 * 60);
+        const startHour = parseInt(nightStart.split(':')[0]);
+        shiftWindows.push({ startAbs, endAbs, roundsTarget: currentDayConfig.rounds, operationalDateStr: currentDateStr, startHour, spansMidnight });
+      }
 
-    if (currentDayConfig.day2Enabled) {
-      const startAbs = getAbsoluteMinutes(currentDateStr, dayShift2Start);
-      let endAbs = getAbsoluteMinutes(currentDateStr, dayShift2End);
-      const spansMidnight = toMinutes(dayShift2End) <= toMinutes(dayShift2Start);
-      if (spansMidnight) endAbs += (24 * 60);
-      const startHour = parseInt(dayShift2Start.split(':')[0]);
-      shiftWindows.push({ startAbs, endAbs, roundsTarget: currentDayConfig.rounds, operationalDateStr: currentDateStr, startHour, spansMidnight });
+      if (currentDayConfig.day1Enabled) {
+        const startAbs = getAbsoluteMinutes(currentDateStr, dayShift1Start);
+        let endAbs = getAbsoluteMinutes(currentDateStr, dayShift1End);
+        const spansMidnight = toMinutes(dayShift1End) <= toMinutes(dayShift1Start);
+        if (spansMidnight) endAbs += (24 * 60);
+        const startHour = parseInt(dayShift1Start.split(':')[0]);
+        shiftWindows.push({ startAbs, endAbs, roundsTarget: currentDayConfig.rounds, operationalDateStr: currentDateStr, startHour, spansMidnight });
+      }
+
+      if (currentDayConfig.day2Enabled) {
+        const startAbs = getAbsoluteMinutes(currentDateStr, dayShift2Start);
+        let endAbs = getAbsoluteMinutes(currentDateStr, dayShift2End);
+        const spansMidnight = toMinutes(dayShift2End) <= toMinutes(dayShift2Start);
+        if (spansMidnight) endAbs += (24 * 60);
+        const startHour = parseInt(dayShift2Start.split(':')[0]);
+        shiftWindows.push({ startAbs, endAbs, roundsTarget: currentDayConfig.rounds, operationalDateStr: currentDateStr, startHour, spansMidnight });
+      }
     }
   }
 
@@ -339,13 +367,23 @@ export const generateMissingData = (
 
         if (maxGap < 40 && attempt > 0) break;
 
-        const randomFactor = (Math.random() * 0.4) + 0.3; // Distribuzione bilanciata al centro della fascia oraria vuota (30-70%)
-        let targetTime = gapStart + (maxGap * randomFactor);
-        
-        const jitter = getRandomInt(-15, 15);
-        let cursor = targetTime + jitter;
-        
-        cursor = Math.max(window.startAbs + 15, Math.min(cursor, window.endAbs - (tagsPerSite * tagIntervalMax) - 15));
+        const windowDuration = window.endAbs - window.startAbs;
+        const approxRoundDuration = Math.max(0, (tagsPerSite - 1) * Math.floor((tagIntervalMin + tagIntervalMax) / 2));
+
+        let cursor: number;
+        if (windowDuration <= approxRoundDuration + 5) {
+          // Finestra stretta, esatta o per orario fisso (es. Apertura 04:30)
+          cursor = window.startAbs;
+        } else {
+          const randomFactor = (Math.random() * 0.4) + 0.3; // Distribuzione bilanciata nella fascia
+          let targetTime = gapStart + (maxGap * randomFactor);
+          const jitter = getRandomInt(-5, 5);
+          cursor = targetTime + jitter;
+
+          const minCursor = window.startAbs;
+          const maxCursor = Math.max(window.startAbs, window.endAbs - approxRoundDuration);
+          cursor = Math.max(minCursor, Math.min(cursor, maxCursor));
+        }
 
         const newRound: PatrolLog[] = [];
         targetTags.forEach(tag => {
