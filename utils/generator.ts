@@ -169,7 +169,10 @@ export const generateMissingData = (
         nightEnabled: config.nightShiftEnabled,
         day1Enabled: config.dayShift1Enabled,
         day2Enabled: config.dayShift2Enabled,
-        rounds: config.roundsPerShift
+        rounds: config.roundsPerShift,
+        nightRounds: config.roundsPerShift,
+        day1Rounds: config.roundsPerShift,
+        day2Rounds: config.roundsPerShift
       };
     }
 
@@ -206,7 +209,10 @@ export const generateMissingData = (
         const spansMidnight = toMinutes(nightEnd) <= toMinutes(nightStart);
         if (spansMidnight) endAbs += (24 * 60);
         const startHour = parseInt(nightStart.split(':')[0]);
-        shiftWindows.push({ startAbs, endAbs, roundsTarget: currentDayConfig.rounds, operationalDateStr: currentDateStr, startHour, spansMidnight });
+        const targetRounds = currentDayConfig.nightRounds ?? currentDayConfig.rounds ?? config.roundsPerShift;
+        if (targetRounds > 0) {
+          shiftWindows.push({ startAbs, endAbs, roundsTarget: targetRounds, operationalDateStr: currentDateStr, startHour, spansMidnight });
+        }
       }
 
       if (currentDayConfig.day1Enabled) {
@@ -215,7 +221,10 @@ export const generateMissingData = (
         const spansMidnight = toMinutes(dayShift1End) <= toMinutes(dayShift1Start);
         if (spansMidnight) endAbs += (24 * 60);
         const startHour = parseInt(dayShift1Start.split(':')[0]);
-        shiftWindows.push({ startAbs, endAbs, roundsTarget: currentDayConfig.rounds, operationalDateStr: currentDateStr, startHour, spansMidnight });
+        const targetRounds = currentDayConfig.day1Rounds ?? currentDayConfig.rounds ?? config.roundsPerShift;
+        if (targetRounds > 0) {
+          shiftWindows.push({ startAbs, endAbs, roundsTarget: targetRounds, operationalDateStr: currentDateStr, startHour, spansMidnight });
+        }
       }
 
       if (currentDayConfig.day2Enabled) {
@@ -224,7 +233,10 @@ export const generateMissingData = (
         const spansMidnight = toMinutes(dayShift2End) <= toMinutes(dayShift2Start);
         if (spansMidnight) endAbs += (24 * 60);
         const startHour = parseInt(dayShift2Start.split(':')[0]);
-        shiftWindows.push({ startAbs, endAbs, roundsTarget: currentDayConfig.rounds, operationalDateStr: currentDateStr, startHour, spansMidnight });
+        const targetRounds = currentDayConfig.day2Rounds ?? currentDayConfig.rounds ?? config.roundsPerShift;
+        if (targetRounds > 0) {
+          shiftWindows.push({ startAbs, endAbs, roundsTarget: targetRounds, operationalDateStr: currentDateStr, startHour, spansMidnight });
+        }
       }
     }
   }

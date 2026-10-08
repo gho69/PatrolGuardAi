@@ -22,7 +22,9 @@ const NumericStepper: React.FC<{
   max: number;
   onChange: (val: number) => void;
   suffix?: string;
-}> = ({ label, value, min, max, onChange, suffix = "" }) => {
+  badge?: string;
+  badgeClass?: string;
+}> = ({ label, value, min, max, onChange, suffix = "", badge, badgeClass }) => {
   const decrement = () => {
     if (value > min) onChange(value - 1);
   };
@@ -32,7 +34,14 @@ const NumericStepper: React.FC<{
   
   return (
     <div className="flex items-center justify-between p-2 rounded-xl bg-sky-500/5 hover:bg-sky-500/10 border border-sky-500/10 transition-all">
-      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider h-full flex items-center pr-2">{label}</span>
+      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider h-full flex items-center pr-2">
+        {badge && (
+          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded mr-1.5 ${badgeClass || 'bg-sky-500/20 text-sky-300'}`}>
+            {badge}
+          </span>
+        )}
+        {label}
+      </span>
       <div className="flex items-center gap-1.5">
         <button 
           onClick={decrement}
@@ -81,8 +90,8 @@ const App: React.FC = () => {
     ],
     tagIntervalMin: 2,
     tagIntervalMax: 5,
-    saturdayConfig: { nightEnabled: true, day1Enabled: false, day2Enabled: false, rounds: 1 },
-    sundayConfig: { nightEnabled: true, day1Enabled: false, day2Enabled: false, rounds: 1 },
+    saturdayConfig: { nightEnabled: true, day1Enabled: false, day2Enabled: false, rounds: 3, nightRounds: 3, day1Rounds: 1, day2Rounds: 1 },
+    sundayConfig: { nightEnabled: true, day1Enabled: false, day2Enabled: false, rounds: 3, nightRounds: 3, day1Rounds: 1, day2Rounds: 1 },
     customRoundSlotsEnabled: false,
     customRoundSlots: [
       { id: '1', name: '1° Giro Notturno', startTime: '00:00', endTime: '01:00', enabled: true, daysFilter: 'all' },
@@ -203,10 +212,28 @@ const App: React.FC = () => {
   };
 
   const updateWeekend = (day: 'saturday' | 'sunday', field: keyof DayConfig, value: any) => {
-    setConfig(prev => ({
-      ...prev,
-      [`${day}Config`]: { ...prev[`${day}Config`], [field]: value }
-    }));
+    setConfig(prev => {
+      const current = prev[`${day}Config`];
+      const updated = { ...current, [field]: value };
+      
+      // Auto-inizializzazione e sincronizzazione quando si abilitano i turni
+      if (field === 'nightEnabled' && value === true && (!updated.nightRounds || updated.nightRounds < 1)) {
+        updated.nightRounds = updated.rounds || prev.roundsPerShift || 3;
+      }
+      if (field === 'day1Enabled' && value === true && (!updated.day1Rounds || updated.day1Rounds < 1)) {
+        updated.day1Rounds = 1;
+      }
+      if (field === 'day2Enabled' && value === true && (!updated.day2Rounds || updated.day2Rounds < 1)) {
+        updated.day2Rounds = 1;
+      }
+      if (field === 'nightRounds') {
+        updated.rounds = value;
+      }
+      return {
+        ...prev,
+        [`${day}Config`]: updated
+      };
+    });
   };
 
   const clearData = () => {
@@ -645,89 +672,178 @@ const App: React.FC = () => {
 
             {activeTab === 'weekend' && (
               <div className="space-y-4 animate-fadeIn">
-                <h3 className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest border-b border-emerald-500/20 pb-1.5 flex justify-between items-center mb-1">
-                  <span>Variazioni Weekend</span>
-                  <i className="fas fa-adjust text-emerald-400/55"></i>
-                </h3>
+                <div className="border-b border-emerald-500/20 pb-2 flex justify-between items-center mb-1">
+                  <div>
+                    <h3 className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">
+                      Variazioni Weekend (Sabato / Domenica)
+                    </h3>
+                    <p className="text-[9px] text-slate-400 mt-0.5">
+                      Configura i singoli turni ed il numero di giri per Notte, Mattina e Pomeriggio
+                    </p>
+                  </div>
+                  <i className="fas fa-adjust text-emerald-400/55 text-sm"></i>
+                </div>
                 
                 {/* SABATO */}
-                <div className="bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/25">
-                  <div className="flex justify-between items-center mb-2.5">
-                    <span className="text-[11px] font-bold text-emerald-300 uppercase tracking-wide">Sabato</span>
-                    <div className="flex gap-1.5">
+                <div className="bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/25 space-y-3">
+                  <div className="flex justify-between items-center pb-2 border-b border-emerald-500/10">
+                    <div>
+                      <span className="text-[11px] font-bold text-emerald-300 uppercase tracking-wide block">Sabato</span>
+                      <span className="text-[9px] text-slate-400 font-mono">
+                        {((config.saturdayConfig.nightEnabled ? (config.saturdayConfig.nightRounds ?? config.saturdayConfig.rounds ?? 3) : 0) +
+                          (config.saturdayConfig.day1Enabled ? (config.saturdayConfig.day1Rounds ?? 1) : 0) +
+                          (config.saturdayConfig.day2Enabled ? (config.saturdayConfig.day2Rounds ?? 1) : 0))} giri totali programmati
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
                       <button 
                         type="button"
                         onClick={() => updateWeekend('saturday', 'nightEnabled', !config.saturdayConfig.nightEnabled)} 
-                        className={`text-[9px] font-bold w-6 h-6 rounded flex items-center justify-center border transition-all cursor-pointer ${config.saturdayConfig.nightEnabled ? 'bg-sky-500/20 border-sky-400 text-sky-300 shadow-[0_0_10px_rgba(14,165,233,0.2)]' : 'border-slate-800 text-slate-500 bg-black/10'}`}
-                        title="Notturno Abilitato"
+                        className={`text-[9px] font-bold px-2 py-1 rounded flex items-center gap-1 border transition-all cursor-pointer ${config.saturdayConfig.nightEnabled ? 'bg-sky-500/20 border-sky-400 text-sky-300 shadow-[0_0_10px_rgba(14,165,233,0.2)]' : 'border-slate-800 text-slate-500 bg-black/20'}`}
+                        title="Attiva/Disattiva Turno Notturno"
                       >
-                        N
+                        <span className="w-1.5 h-1.5 rounded-full bg-sky-400"></span> N
                       </button>
                       <button 
                         type="button"
                         onClick={() => updateWeekend('saturday', 'day1Enabled', !config.saturdayConfig.day1Enabled)} 
-                        className={`text-[9px] font-bold w-6 h-6 rounded flex items-center justify-center border transition-all cursor-pointer ${config.saturdayConfig.day1Enabled ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'border-slate-800 text-slate-500 bg-black/10'}`}
-                        title="Diurno Mattina Abilitato"
+                        className={`text-[9px] font-bold px-2 py-1 rounded flex items-center gap-1 border transition-all cursor-pointer ${config.saturdayConfig.day1Enabled ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'border-slate-800 text-slate-500 bg-black/20'}`}
+                        title="Attiva/Disattiva Diurno Mattina"
                       >
-                        M
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> M
                       </button>
                       <button 
                         type="button"
                         onClick={() => updateWeekend('saturday', 'day2Enabled', !config.saturdayConfig.day2Enabled)} 
-                        className={`text-[9px] font-bold w-6 h-6 rounded flex items-center justify-center border transition-all cursor-pointer ${config.saturdayConfig.day2Enabled ? 'bg-orange-500/20 border-orange-400 text-orange-300 shadow-[0_0_10px_rgba(249,115,22,0.2)]' : 'border-slate-800 text-slate-500 bg-black/10'}`}
-                        title="Diurno Pomeriggio Abilitato"
+                        className={`text-[9px] font-bold px-2 py-1 rounded flex items-center gap-1 border transition-all cursor-pointer ${config.saturdayConfig.day2Enabled ? 'bg-orange-500/20 border-orange-400 text-orange-300 shadow-[0_0_10px_rgba(249,115,22,0.2)]' : 'border-slate-800 text-slate-500 bg-black/20'}`}
+                        title="Attiva/Disattiva Diurno Pomeriggio"
                       >
-                        P
+                        <span className="w-1.5 h-1.5 rounded-full bg-orange-400"></span> P
                       </button>
                     </div>
                   </div>
-                  <NumericStepper 
-                    label="Giri Sabato" 
-                    value={config.saturdayConfig.rounds} 
-                    min={0} 
-                    max={12} 
-                    onChange={(val) => updateWeekend('saturday', 'rounds', val)} 
-                  />
+
+                  <div className="space-y-2">
+                    {config.saturdayConfig.nightEnabled && (
+                      <NumericStepper 
+                        label="Giri Notturni" 
+                        badge="N"
+                        badgeClass="bg-sky-500/20 text-sky-300 border border-sky-400/30"
+                        value={config.saturdayConfig.nightRounds ?? config.saturdayConfig.rounds ?? 3} 
+                        min={1} 
+                        max={12} 
+                        onChange={(val) => updateWeekend('saturday', 'nightRounds', val)} 
+                      />
+                    )}
+                    {config.saturdayConfig.day1Enabled && (
+                      <NumericStepper 
+                        label="Giri Mattina" 
+                        badge="M"
+                        badgeClass="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
+                        value={config.saturdayConfig.day1Rounds ?? 1} 
+                        min={1} 
+                        max={12} 
+                        onChange={(val) => updateWeekend('saturday', 'day1Rounds', val)} 
+                      />
+                    )}
+                    {config.saturdayConfig.day2Enabled && (
+                      <NumericStepper 
+                        label="Giri Pomeriggio" 
+                        badge="P"
+                        badgeClass="bg-orange-500/20 text-orange-300 border border-orange-400/30"
+                        value={config.saturdayConfig.day2Rounds ?? 1} 
+                        min={1} 
+                        max={12} 
+                        onChange={(val) => updateWeekend('saturday', 'day2Rounds', val)} 
+                      />
+                    )}
+                    {!config.saturdayConfig.nightEnabled && !config.saturdayConfig.day1Enabled && !config.saturdayConfig.day2Enabled && (
+                      <div className="text-center py-2 text-[10px] text-slate-500 italic bg-black/20 rounded-lg">
+                        Nessun turno abilitato per il Sabato. Clicca su N, M o P per attivare i servizi.
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* DOMENICA */}
-                <div className="bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/25">
-                  <div className="flex justify-between items-center mb-2.5">
-                    <span className="text-[11px] font-bold text-emerald-300 uppercase tracking-wide">Domenica</span>
-                    <div className="flex gap-1.5">
+                <div className="bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/25 space-y-3">
+                  <div className="flex justify-between items-center pb-2 border-b border-emerald-500/10">
+                    <div>
+                      <span className="text-[11px] font-bold text-emerald-300 uppercase tracking-wide block">Domenica</span>
+                      <span className="text-[9px] text-slate-400 font-mono">
+                        {((config.sundayConfig.nightEnabled ? (config.sundayConfig.nightRounds ?? config.sundayConfig.rounds ?? 3) : 0) +
+                          (config.sundayConfig.day1Enabled ? (config.sundayConfig.day1Rounds ?? 1) : 0) +
+                          (config.sundayConfig.day2Enabled ? (config.sundayConfig.day2Rounds ?? 1) : 0))} giri totali programmati
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
                       <button 
                         type="button"
                         onClick={() => updateWeekend('sunday', 'nightEnabled', !config.sundayConfig.nightEnabled)} 
-                        className={`text-[9px] font-bold w-6 h-6 rounded flex items-center justify-center border transition-all cursor-pointer ${config.sundayConfig.nightEnabled ? 'bg-sky-500/20 border-sky-400 text-sky-300 shadow-[0_0_10px_rgba(14,165,233,0.2)]' : 'border-slate-800 text-slate-500 bg-black/10'}`}
-                        title="Notturno Abilitato"
+                        className={`text-[9px] font-bold px-2 py-1 rounded flex items-center gap-1 border transition-all cursor-pointer ${config.sundayConfig.nightEnabled ? 'bg-sky-500/20 border-sky-400 text-sky-300 shadow-[0_0_10px_rgba(14,165,233,0.2)]' : 'border-slate-800 text-slate-500 bg-black/20'}`}
+                        title="Attiva/Disattiva Turno Notturno"
                       >
-                        N
+                        <span className="w-1.5 h-1.5 rounded-full bg-sky-400"></span> N
                       </button>
                       <button 
                         type="button"
                         onClick={() => updateWeekend('sunday', 'day1Enabled', !config.sundayConfig.day1Enabled)} 
-                        className={`text-[9px] font-bold w-6 h-6 rounded flex items-center justify-center border transition-all cursor-pointer ${config.sundayConfig.day1Enabled ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'border-slate-800 text-slate-500 bg-black/10'}`}
-                        title="Diurno Mattina Abilitato"
+                        className={`text-[9px] font-bold px-2 py-1 rounded flex items-center gap-1 border transition-all cursor-pointer ${config.sundayConfig.day1Enabled ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'border-slate-800 text-slate-500 bg-black/20'}`}
+                        title="Attiva/Disattiva Diurno Mattina"
                       >
-                        M
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> M
                       </button>
                       <button 
                         type="button"
                         onClick={() => updateWeekend('sunday', 'day2Enabled', !config.sundayConfig.day2Enabled)} 
-                        className={`text-[9px] font-bold w-6 h-6 rounded flex items-center justify-center border transition-all cursor-pointer ${config.sundayConfig.day2Enabled ? 'bg-orange-500/20 border-orange-400 text-orange-300 shadow-[0_0_10px_rgba(249,115,22,0.2)]' : 'border-slate-800 text-slate-500 bg-black/10'}`}
-                        title="Diurno Pomeriggio Abilitato"
+                        className={`text-[9px] font-bold px-2 py-1 rounded flex items-center gap-1 border transition-all cursor-pointer ${config.sundayConfig.day2Enabled ? 'bg-orange-500/20 border-orange-400 text-orange-300 shadow-[0_0_10px_rgba(249,115,22,0.2)]' : 'border-slate-800 text-slate-500 bg-black/20'}`}
+                        title="Attiva/Disattiva Diurno Pomeriggio"
                       >
-                        P
+                        <span className="w-1.5 h-1.5 rounded-full bg-orange-400"></span> P
                       </button>
                     </div>
                   </div>
-                  <NumericStepper 
-                    label="Giri Domenica" 
-                    value={config.sundayConfig.rounds} 
-                    min={0} 
-                    max={12} 
-                    onChange={(val) => updateWeekend('sunday', 'rounds', val)} 
-                  />
+
+                  <div className="space-y-2">
+                    {config.sundayConfig.nightEnabled && (
+                      <NumericStepper 
+                        label="Giri Notturni" 
+                        badge="N"
+                        badgeClass="bg-sky-500/20 text-sky-300 border border-sky-400/30"
+                        value={config.sundayConfig.nightRounds ?? config.sundayConfig.rounds ?? 3} 
+                        min={1} 
+                        max={12} 
+                        onChange={(val) => updateWeekend('sunday', 'nightRounds', val)} 
+                      />
+                    )}
+                    {config.sundayConfig.day1Enabled && (
+                      <NumericStepper 
+                        label="Giri Mattina" 
+                        badge="M"
+                        badgeClass="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
+                        value={config.sundayConfig.day1Rounds ?? 1} 
+                        min={1} 
+                        max={12} 
+                        onChange={(val) => updateWeekend('sunday', 'day1Rounds', val)} 
+                      />
+                    )}
+                    {config.sundayConfig.day2Enabled && (
+                      <NumericStepper 
+                        label="Giri Pomeriggio" 
+                        badge="P"
+                        badgeClass="bg-orange-500/20 text-orange-300 border border-orange-400/30"
+                        value={config.sundayConfig.day2Rounds ?? 1} 
+                        min={1} 
+                        max={12} 
+                        onChange={(val) => updateWeekend('sunday', 'day2Rounds', val)} 
+                      />
+                    )}
+                    {!config.sundayConfig.nightEnabled && !config.sundayConfig.day1Enabled && !config.sundayConfig.day2Enabled && (
+                      <div className="text-center py-2 text-[10px] text-slate-500 italic bg-black/20 rounded-lg">
+                        Nessun turno abilitato per la Domenica. Clicca su N, M o P per attivare i servizi.
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

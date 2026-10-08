@@ -11,6 +11,9 @@ export interface DayConfig {
   day1Enabled: boolean;
   day2Enabled: boolean;
   rounds: number;
+  nightRounds?: number;
+  day1Rounds?: number;
+  day2Rounds?: number;
 }
 
 export interface CustomRoundSlot {
