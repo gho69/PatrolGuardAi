@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { parsePatrolFile } from './utils/parser';
 import { generateMissingData } from './utils/generator';
-import { PatrolLog, SiteConfig, ReportData, DayConfig, CustomRoundSlot } from './types';
+import { PatrolLog, SiteConfig, ReportData, DayConfig, CustomRoundSlot, ClientProfile } from './types';
 
 const Card: React.FC<{ children: React.ReactNode, title?: string, icon?: string, className?: string }> = ({ children, title, icon, className = "" }) => (
   <div className={`glass p-6 rounded-2xl neon-border transition-all duration-300 ${className}`}>
@@ -67,29 +67,29 @@ const NumericStepper: React.FC<{
   );
 };
 
-const App: React.FC = () => {
-  const [logs, setLogs] = useState<PatrolLog[]>([]);
-  const [activeTab, setActiveTab] = useState<'base' | 'shifts' | 'slots' | 'weekend'>('base');
-  const [config, setConfig] = useState<SiteConfig>({
-    month: new Date().getMonth(),
-    year: new Date().getFullYear(),
-    roundsPerShift: 1, // Default a 1 per notte/giorno secondo l'esigenza del cliente corporativo
-    tagsPerSite: 2,    // Default a 2 tag come da configurazione cliente nell'immagine
-    nightShiftEnabled: true,
-    dayShift1Enabled: false,
-    dayShift2Enabled: false,
-    nightStart: "23:00",
-    nightEnd: "06:00",
-    dayShift1Start: "06:00",
-    dayShift1End: "14:00",
-    dayShift2Start: "14:00",
-    dayShift2End: "22:00",
+const DEFAULT_CLIENTS: ClientProfile[] = [
+  {
+    id: 'granarolo',
+    name: 'Sede Uffici Granarolo',
+    code: 'CLI-001',
+    notes: 'Presidio notturno Lun-Ven (1 giro), weekend con ronda notturna intensiva (3 giri).',
+    roundsPerShift: 1,
+    tagsPerSite: 2,
     tagNames: [
-      "Ispezione: 1 INGRESSO UFFICI",
-      "Ispezione: 2 VIA GRANAROLO"
+      'Ispezione: 1 INGRESSO UFFICI',
+      'Ispezione: 2 VIA GRANAROLO'
     ],
     tagIntervalMin: 2,
     tagIntervalMax: 5,
+    nightShiftEnabled: true,
+    dayShift1Enabled: false,
+    dayShift2Enabled: false,
+    nightStart: '23:00',
+    nightEnd: '06:00',
+    dayShift1Start: '06:00',
+    dayShift1End: '14:00',
+    dayShift2Start: '14:00',
+    dayShift2End: '22:00',
     saturdayConfig: { nightEnabled: true, day1Enabled: false, day2Enabled: false, rounds: 3, nightRounds: 3, day1Rounds: 1, day2Rounds: 1 },
     sundayConfig: { nightEnabled: true, day1Enabled: false, day2Enabled: false, rounds: 3, nightRounds: 3, day1Rounds: 1, day2Rounds: 1 },
     customRoundSlotsEnabled: false,
@@ -98,7 +98,496 @@ const App: React.FC = () => {
       { id: '2', name: '2° Giro Notturno', startTime: '02:00', endTime: '03:00', enabled: true, daysFilter: 'all' },
       { id: '3', name: 'Apertura Obbligatoria', startTime: '04:30', endTime: '05:00', enabled: true, daysFilter: 'all' }
     ]
+  },
+  {
+    id: 'logistica',
+    name: 'Hub Logistico Interporto',
+    code: 'CLI-002',
+    notes: 'Magazzini e banchine merci. 2 giri notturni, operatività continua weekend giorno e notte.',
+    roundsPerShift: 2,
+    tagsPerSite: 4,
+    tagNames: [
+      'Punto 1: Banchine Carico 1-8',
+      'Punto 2: Varco Carraio Nord',
+      'Punto 3: Recinzione Perimetrale Ovest',
+      'Punto 4: Cabina Elettrica & Gruppo'
+    ],
+    tagIntervalMin: 3,
+    tagIntervalMax: 7,
+    nightShiftEnabled: true,
+    dayShift1Enabled: false,
+    dayShift2Enabled: false,
+    nightStart: '22:00',
+    nightEnd: '06:00',
+    dayShift1Start: '06:00',
+    dayShift1End: '14:00',
+    dayShift2Start: '14:00',
+    dayShift2End: '22:00',
+    saturdayConfig: { nightEnabled: true, day1Enabled: true, day2Enabled: true, rounds: 2, nightRounds: 2, day1Rounds: 2, day2Rounds: 2 },
+    sundayConfig: { nightEnabled: true, day1Enabled: true, day2Enabled: true, rounds: 2, nightRounds: 2, day1Rounds: 2, day2Rounds: 2 },
+    customRoundSlotsEnabled: false,
+    customRoundSlots: [
+      { id: '1', name: 'Controllo Banchine', startTime: '23:00', endTime: '00:30', enabled: true, daysFilter: 'all' },
+      { id: '2', name: 'Ronda Perimetrale', startTime: '03:00', endTime: '04:30', enabled: true, daysFilter: 'all' }
+    ]
+  },
+  {
+    id: 'commerciale',
+    name: 'Centro Commerciale Le Cupole',
+    code: 'CLI-003',
+    notes: 'Galleria commerciale e parcheggi: 3 ispezioni notturne con apertura varchi programmata alle 05:45.',
+    roundsPerShift: 3,
+    tagsPerSite: 3,
+    tagNames: [
+      'Galleria Negozi Livello 0',
+      'Uscite di Sicurezza Retro',
+      'Parcheggio Sotterraneo Settore B'
+    ],
+    tagIntervalMin: 2,
+    tagIntervalMax: 5,
+    nightShiftEnabled: true,
+    dayShift1Enabled: false,
+    dayShift2Enabled: false,
+    nightStart: '21:30',
+    nightEnd: '06:30',
+    dayShift1Start: '06:30',
+    dayShift1End: '14:30',
+    dayShift2Start: '14:30',
+    dayShift2End: '21:30',
+    saturdayConfig: { nightEnabled: true, day1Enabled: false, day2Enabled: false, rounds: 3, nightRounds: 3, day1Rounds: 1, day2Rounds: 1 },
+    sundayConfig: { nightEnabled: true, day1Enabled: true, day2Enabled: false, rounds: 3, nightRounds: 3, day1Rounds: 2, day2Rounds: 1 },
+    customRoundSlotsEnabled: true,
+    customRoundSlots: [
+      { id: '1', name: 'Ispezione Chiusura', startTime: '22:00', endTime: '23:15', enabled: true, daysFilter: 'all' },
+      { id: '2', name: 'Controllo Notturno', startTime: '02:00', endTime: '03:30', enabled: true, daysFilter: 'all' },
+      { id: '3', name: 'Apertura Varchi Staff', startTime: '05:45', endTime: '06:30', enabled: true, daysFilter: 'all' }
+    ]
+  }
+];
+
+const App: React.FC = () => {
+  const [logs, setLogs] = useState<PatrolLog[]>([]);
+  const [activeTab, setActiveTab] = useState<'base' | 'shifts' | 'slots' | 'weekend'>('base');
+
+  // Gestione profili clienti salvati in memoria/localStorage
+  const [clients, setClients] = useState<ClientProfile[]>(() => {
+    try {
+      const saved = localStorage.getItem('patrolguard_clients_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error('Errore nel caricamento dei clienti salvati', e);
+    }
+    return DEFAULT_CLIENTS;
   });
+
+  const [selectedClientId, setSelectedClientId] = useState<string>(() => {
+    try {
+      const savedId = localStorage.getItem('patrolguard_selected_client_id');
+      if (savedId) return savedId;
+    } catch (e) {}
+    return DEFAULT_CLIENTS[0].id;
+  });
+
+  const activeClient = useMemo(() => {
+    return clients.find(c => c.id === selectedClientId) || clients[0] || DEFAULT_CLIENTS[0];
+  }, [clients, selectedClientId]);
+
+  // Stato modali
+  const [showNewClientModal, setShowNewClientModal] = useState<boolean>(false);
+  const [newClientName, setNewClientName] = useState<string>('');
+  const [newClientCode, setNewClientCode] = useState<string>('');
+  const [newClientNotes, setNewClientNotes] = useState<string>('');
+  const [newClientCopyCurrent, setNewClientCopyCurrent] = useState<boolean>(true);
+
+  const [showManageClientsModal, setShowManageClientsModal] = useState<boolean>(false);
+  const [editingClient, setEditingClient] = useState<ClientProfile | null>(null);
+  const [clientToDelete, setClientToDelete] = useState<ClientProfile | null>(null);
+  const [archiveStatusMessage, setArchiveStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const [saveStatusMessage, setSaveStatusMessage] = useState<string | null>(null);
+
+  const [config, setConfig] = useState<SiteConfig>(() => {
+    const initial = clients.find(c => c.id === selectedClientId) || clients[0] || DEFAULT_CLIENTS[0];
+    return {
+      clientId: initial.id,
+      clientName: initial.name,
+      month: new Date().getMonth(),
+      year: new Date().getFullYear(),
+      roundsPerShift: initial.roundsPerShift,
+      tagsPerSite: initial.tagsPerSite,
+      nightShiftEnabled: initial.nightShiftEnabled,
+      dayShift1Enabled: initial.dayShift1Enabled,
+      dayShift2Enabled: initial.dayShift2Enabled,
+      nightStart: initial.nightStart,
+      nightEnd: initial.nightEnd,
+      dayShift1Start: initial.dayShift1Start,
+      dayShift1End: initial.dayShift1End,
+      dayShift2Start: initial.dayShift2Start,
+      dayShift2End: initial.dayShift2End,
+      tagNames: [...initial.tagNames],
+      tagIntervalMin: initial.tagIntervalMin,
+      tagIntervalMax: initial.tagIntervalMax,
+      saturdayConfig: { ...initial.saturdayConfig },
+      sundayConfig: { ...initial.sundayConfig },
+      customRoundSlotsEnabled: initial.customRoundSlotsEnabled ?? false,
+      customRoundSlots: initial.customRoundSlots ? [...initial.customRoundSlots] : []
+    };
+  });
+
+  // Sincronizzazione automatica della configurazione corrente sul profilo cliente attivo in localStorage
+  useEffect(() => {
+    const currentId = config.clientId || selectedClientId;
+    setClients(prev => {
+      const idx = prev.findIndex(c => c.id === currentId);
+      if (idx === -1) return prev;
+      const current = prev[idx];
+      const updated = [...prev];
+      updated[idx] = {
+        ...current,
+        name: config.clientName || current.name,
+        roundsPerShift: config.roundsPerShift,
+        tagsPerSite: config.tagsPerSite,
+        tagNames: [...config.tagNames],
+        tagIntervalMin: config.tagIntervalMin,
+        tagIntervalMax: config.tagIntervalMax,
+        nightShiftEnabled: config.nightShiftEnabled,
+        nightStart: config.nightStart,
+        nightEnd: config.nightEnd,
+        dayShift1Enabled: config.dayShift1Enabled,
+        dayShift1Start: config.dayShift1Start,
+        dayShift1End: config.dayShift1End,
+        dayShift2Enabled: config.dayShift2Enabled,
+        dayShift2Start: config.dayShift2Start,
+        dayShift2End: config.dayShift2End,
+        saturdayConfig: { ...config.saturdayConfig },
+        sundayConfig: { ...config.sundayConfig },
+        customRoundSlotsEnabled: config.customRoundSlotsEnabled,
+        customRoundSlots: config.customRoundSlots ? [...config.customRoundSlots] : []
+      };
+      try {
+        localStorage.setItem('patrolguard_clients_v2', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  }, [
+    config.roundsPerShift,
+    config.tagsPerSite,
+    config.tagNames,
+    config.tagIntervalMin,
+    config.tagIntervalMax,
+    config.nightShiftEnabled,
+    config.nightStart,
+    config.nightEnd,
+    config.dayShift1Enabled,
+    config.dayShift1Start,
+    config.dayShift1End,
+    config.dayShift2Enabled,
+    config.dayShift2Start,
+    config.dayShift2End,
+    config.saturdayConfig,
+    config.sundayConfig,
+    config.customRoundSlotsEnabled,
+    config.customRoundSlots,
+    config.clientId,
+    config.clientName,
+    selectedClientId
+  ]);
+
+  const handleSelectClient = (clientId: string) => {
+    const target = clients.find(c => c.id === clientId);
+    if (!target) return;
+    setSelectedClientId(clientId);
+    try {
+      localStorage.setItem('patrolguard_selected_client_id', clientId);
+    } catch (e) {}
+
+    setConfig(prev => ({
+      ...prev,
+      clientId: target.id,
+      clientName: target.name,
+      roundsPerShift: target.roundsPerShift,
+      tagsPerSite: target.tagsPerSite,
+      tagNames: [...target.tagNames],
+      tagIntervalMin: target.tagIntervalMin,
+      tagIntervalMax: target.tagIntervalMax,
+      nightShiftEnabled: target.nightShiftEnabled,
+      nightStart: target.nightStart,
+      nightEnd: target.nightEnd,
+      dayShift1Enabled: target.dayShift1Enabled,
+      dayShift1Start: target.dayShift1Start,
+      dayShift1End: target.dayShift1End,
+      dayShift2Enabled: target.dayShift2Enabled,
+      dayShift2Start: target.dayShift2Start,
+      dayShift2End: target.dayShift2End,
+      saturdayConfig: { ...target.saturdayConfig },
+      sundayConfig: { ...target.sundayConfig },
+      customRoundSlotsEnabled: target.customRoundSlotsEnabled ?? false,
+      customRoundSlots: target.customRoundSlots ? [...target.customRoundSlots] : []
+    }));
+
+    setSaveStatusMessage(`Profilo "${target.name}" caricato.`);
+    setTimeout(() => setSaveStatusMessage(null), 2500);
+  };
+
+  const saveCurrentToClientExplicit = () => {
+    setSaveStatusMessage(`Configurazione salvata per "${config.clientName || 'Cliente'}"!`);
+    setTimeout(() => setSaveStatusMessage(null), 2500);
+  };
+
+  const handleCreateNewClient = () => {
+    const name = newClientName.trim() || `Nuovo Cliente ${clients.length + 1}`;
+    const newId = `cli_${Date.now()}`;
+    const baseSource = newClientCopyCurrent ? config : DEFAULT_CLIENTS[0];
+
+    const newProfile: ClientProfile = {
+      id: newId,
+      name,
+      code: newClientCode.trim() || `CLI-${String(clients.length + 1).padStart(3, '0')}`,
+      notes: newClientNotes.trim() || 'Postazione di vigilanza programmata',
+      roundsPerShift: baseSource.roundsPerShift,
+      tagsPerSite: baseSource.tagsPerSite,
+      tagNames: [...baseSource.tagNames],
+      tagIntervalMin: baseSource.tagIntervalMin,
+      tagIntervalMax: baseSource.tagIntervalMax,
+      nightShiftEnabled: baseSource.nightShiftEnabled,
+      nightStart: baseSource.nightStart,
+      nightEnd: baseSource.nightEnd,
+      dayShift1Enabled: baseSource.dayShift1Enabled,
+      dayShift1Start: baseSource.dayShift1Start,
+      dayShift1End: baseSource.dayShift1End,
+      dayShift2Enabled: baseSource.dayShift2Enabled,
+      dayShift2Start: baseSource.dayShift2Start,
+      dayShift2End: baseSource.dayShift2End,
+      saturdayConfig: { ...baseSource.saturdayConfig },
+      sundayConfig: { ...baseSource.sundayConfig },
+      customRoundSlotsEnabled: baseSource.customRoundSlotsEnabled ?? false,
+      customRoundSlots: baseSource.customRoundSlots ? [...baseSource.customRoundSlots] : []
+    };
+
+    const updated = [...clients, newProfile];
+    setClients(updated);
+    try {
+      localStorage.setItem('patrolguard_clients_v2', JSON.stringify(updated));
+      localStorage.setItem('patrolguard_selected_client_id', newId);
+    } catch (e) {}
+
+    setSelectedClientId(newId);
+    setConfig(prev => ({
+      ...prev,
+      clientId: newProfile.id,
+      clientName: newProfile.name,
+      roundsPerShift: newProfile.roundsPerShift,
+      tagsPerSite: newProfile.tagsPerSite,
+      tagNames: [...newProfile.tagNames],
+      tagIntervalMin: newProfile.tagIntervalMin,
+      tagIntervalMax: newProfile.tagIntervalMax,
+      nightShiftEnabled: newProfile.nightShiftEnabled,
+      nightStart: newProfile.nightStart,
+      nightEnd: newProfile.nightEnd,
+      dayShift1Enabled: newProfile.dayShift1Enabled,
+      dayShift1Start: newProfile.dayShift1Start,
+      dayShift1End: newProfile.dayShift1End,
+      dayShift2Enabled: newProfile.dayShift2Enabled,
+      dayShift2Start: newProfile.dayShift2Start,
+      dayShift2End: newProfile.dayShift2End,
+      saturdayConfig: { ...newProfile.saturdayConfig },
+      sundayConfig: { ...newProfile.sundayConfig },
+      customRoundSlotsEnabled: newProfile.customRoundSlotsEnabled ?? false,
+      customRoundSlots: newProfile.customRoundSlots ? [...newProfile.customRoundSlots] : []
+    }));
+
+    setShowNewClientModal(false);
+    setNewClientName('');
+    setNewClientCode('');
+    setNewClientNotes('');
+    setSaveStatusMessage(`Cliente "${name}" creato e attivato!`);
+    setTimeout(() => setSaveStatusMessage(null), 3000);
+  };
+
+  const handleDuplicateClient = (targetId: string) => {
+    const source = clients.find(c => c.id === targetId);
+    if (!source) return;
+    const newId = `cli_${Date.now()}`;
+    const duplicated: ClientProfile = {
+      ...source,
+      id: newId,
+      name: `${source.name} (Copia)`,
+      code: source.code ? `${source.code}-B` : undefined,
+      tagNames: [...source.tagNames],
+      saturdayConfig: { ...source.saturdayConfig },
+      sundayConfig: { ...source.sundayConfig },
+      customRoundSlots: source.customRoundSlots ? [...source.customRoundSlots] : []
+    };
+
+    const updated = [...clients, duplicated];
+    setClients(updated);
+    try {
+      localStorage.setItem('patrolguard_clients_v2', JSON.stringify(updated));
+    } catch (e) {}
+    handleSelectClient(newId);
+  };
+
+  const handleDeleteClick = (client: ClientProfile) => {
+    if (clients.length <= 1) {
+      setArchiveStatusMessage({
+        type: 'error',
+        text: "Impossibile eliminare: deve essere presente almeno un cliente configurato in archivio."
+      });
+      setTimeout(() => setArchiveStatusMessage(null), 3500);
+      return;
+    }
+    setClientToDelete(client);
+  };
+
+  const confirmDeleteClient = () => {
+    if (!clientToDelete) return;
+    const targetId = clientToDelete.id;
+    const deletedName = clientToDelete.name;
+
+    if (clients.length <= 1) {
+      setArchiveStatusMessage({
+        type: 'error',
+        text: "Impossibile eliminare l'unico cliente presente in archivio."
+      });
+      setClientToDelete(null);
+      setTimeout(() => setArchiveStatusMessage(null), 3500);
+      return;
+    }
+
+    const remaining = clients.filter(c => c.id !== targetId);
+    setClients(remaining);
+    try {
+      localStorage.setItem('patrolguard_clients_v2', JSON.stringify(remaining));
+    } catch (e) {}
+
+    // Se stiamo eliminando il cliente correntemente selezionato, passiamo al primo rimanente
+    if (selectedClientId === targetId || config.clientId === targetId) {
+      const nextClient = remaining[0];
+      setSelectedClientId(nextClient.id);
+      try {
+        localStorage.setItem('patrolguard_selected_client_id', nextClient.id);
+      } catch (e) {}
+
+      setConfig(prev => ({
+        ...prev,
+        clientId: nextClient.id,
+        clientName: nextClient.name,
+        roundsPerShift: nextClient.roundsPerShift,
+        tagsPerSite: nextClient.tagsPerSite,
+        tagNames: [...nextClient.tagNames],
+        tagIntervalMin: nextClient.tagIntervalMin,
+        tagIntervalMax: nextClient.tagIntervalMax,
+        nightShiftEnabled: nextClient.nightShiftEnabled,
+        nightStart: nextClient.nightStart,
+        nightEnd: nextClient.nightEnd,
+        dayShift1Enabled: nextClient.dayShift1Enabled,
+        dayShift1Start: nextClient.dayShift1Start,
+        dayShift1End: nextClient.dayShift1End,
+        dayShift2Enabled: nextClient.dayShift2Enabled,
+        dayShift2Start: nextClient.dayShift2Start,
+        dayShift2End: nextClient.dayShift2End,
+        saturdayConfig: { ...nextClient.saturdayConfig },
+        sundayConfig: { ...nextClient.sundayConfig },
+        customRoundSlotsEnabled: nextClient.customRoundSlotsEnabled ?? false,
+        customRoundSlots: nextClient.customRoundSlots ? [...nextClient.customRoundSlots] : []
+      }));
+    }
+
+    setClientToDelete(null);
+    setArchiveStatusMessage({
+      type: 'success',
+      text: `Profilo "${deletedName}" eliminato con successo dall'archivio.`
+    });
+    setSaveStatusMessage(`Cliente "${deletedName}" eliminato.`);
+    setTimeout(() => {
+      setArchiveStatusMessage(null);
+      setSaveStatusMessage(null);
+    }, 3500);
+  };
+
+  const handleUpdateClientInfo = (id: string, name: string, code: string, notes: string) => {
+    setClients(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, name, code, notes } : c);
+      try {
+        localStorage.setItem('patrolguard_clients_v2', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    if (config.clientId === id || selectedClientId === id) {
+      setConfig(prev => ({ ...prev, clientName: name }));
+    }
+    setEditingClient(null);
+    setArchiveStatusMessage({
+      type: 'success',
+      text: `Dati cliente "${name}" aggiornati con successo!`
+    });
+    setSaveStatusMessage(`Informazioni cliente aggiornate!`);
+    setTimeout(() => {
+      setArchiveStatusMessage(null);
+      setSaveStatusMessage(null);
+    }, 2500);
+  };
+
+  const handleExportClientsJson = () => {
+    const jsonStr = JSON.stringify(clients, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `configurazioni_clienti_patrolguard_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setArchiveStatusMessage({
+      type: 'success',
+      text: `Esportato backup JSON con ${clients.length} clienti!`
+    });
+    setTimeout(() => setArchiveStatusMessage(null), 3000);
+  };
+
+  const handleImportClientsJson = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string);
+        if (Array.isArray(data) && data.length > 0 && data[0].name && Array.isArray(data[0].tagNames)) {
+          setClients(data);
+          try {
+            localStorage.setItem('patrolguard_clients_v2', JSON.stringify(data));
+          } catch (e) {}
+          handleSelectClient(data[0].id);
+          setArchiveStatusMessage({
+            type: 'success',
+            text: `Importati con successo ${data.length} profili cliente dal file di backup!`
+          });
+          setSaveStatusMessage(`Importati ${data.length} profili cliente!`);
+          setTimeout(() => {
+            setArchiveStatusMessage(null);
+            setSaveStatusMessage(null);
+          }, 3500);
+        } else {
+          setArchiveStatusMessage({
+            type: 'error',
+            text: "File JSON non valido: verificare che contenga profili cliente validi."
+          });
+          setTimeout(() => setArchiveStatusMessage(null), 3500);
+        }
+      } catch (err) {
+        setArchiveStatusMessage({
+          type: 'error',
+          text: "Errore nella lettura del file JSON di backup."
+        });
+        setTimeout(() => setArchiveStatusMessage(null), 3500);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   const addCustomSlot = () => {
     setConfig(prev => {
@@ -244,7 +733,9 @@ const App: React.FC = () => {
   const exportToExcel = () => {
     // @ts-ignore
     if (!window.XLSX) return;
+    const clientName = config.clientName || 'Cliente';
     const data = logs.map(l => ({ 
+      Cliente: clientName,
       Data: l.date.split('-').reverse().join('/'), 
       Ora: l.time.substring(0, 5), 
       'Punto Ispezione': l.tag,
@@ -256,8 +747,9 @@ const App: React.FC = () => {
     const wb = window.XLSX.utils.book_new();
     // @ts-ignore
     window.XLSX.utils.book_append_sheet(wb, ws, "Report");
+    const safeClient = clientName.replace(/[^a-zA-Z0-9_\-]/g, '_');
     // @ts-ignore
-    window.XLSX.writeFile(wb, `Report_Patrol_${config.year}_${config.month + 1}.xlsx`);
+    window.XLSX.writeFile(wb, `Report_Patrol_${safeClient}_${config.year}_${config.month + 1}.xlsx`);
   };
 
   return (
@@ -296,7 +788,97 @@ const App: React.FC = () => {
 
       <main className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 flex flex-col gap-6">
-          <Card className="p-4" title="Configurazione Client" icon="fas fa-sliders">
+          <Card className="p-4" title="Configurazione Cliente & Postazione" icon="fas fa-building">
+            {/* BARRA SELEZIONE E GESTIONE PROFILO CLIENTE */}
+            <div className="mb-4 p-3 bg-gradient-to-r from-sky-950/40 via-slate-900/70 to-slate-900/50 border border-sky-400/30 rounded-xl space-y-2.5 shadow-[0_0_15px_rgba(14,165,233,0.08)]">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-orbitron font-bold uppercase tracking-wider text-sky-300 flex items-center gap-1.5">
+                    <i className="fas fa-id-card text-sky-400 text-xs"></i>
+                    Cliente Selezionato
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewClientName('');
+                      setNewClientCode(`CLI-${String(clients.length + 1).padStart(3, '0')}`);
+                      setNewClientNotes('');
+                      setNewClientCopyCurrent(true);
+                      setShowNewClientModal(true);
+                    }}
+                    className="px-2 py-1 text-[9px] font-bold bg-sky-500/20 hover:bg-sky-500/35 border border-sky-400/40 text-sky-300 rounded-lg flex items-center gap-1 transition-all cursor-pointer select-none active:scale-95"
+                    title="Crea una nuova postazione o profilo cliente"
+                  >
+                    <i className="fas fa-plus text-[8px]"></i> Nuovo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowManageClientsModal(true)}
+                    className="px-2 py-1 text-[9px] font-bold bg-slate-800/90 hover:bg-slate-700 border border-slate-600/50 text-slate-200 rounded-lg flex items-center gap-1 transition-all cursor-pointer select-none active:scale-95"
+                    title="Apri l'archivio completo per gestire, esportare o importare i clienti"
+                  >
+                    <i className="fas fa-folder-open text-[8px]"></i> Archivio
+                  </button>
+                </div>
+              </div>
+
+              {/* Selettore a tendina e pulsante Salva */}
+              <div className="flex items-center gap-1.5">
+                <div className="relative flex-1">
+                  <select
+                    value={selectedClientId}
+                    onChange={(e) => handleSelectClient(e.target.value)}
+                    className="w-full bg-slate-950 border border-sky-400/40 rounded-lg px-2.5 py-1.5 text-xs text-white font-medium outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 transition-all cursor-pointer pr-6 appearance-none"
+                  >
+                    {clients.map(c => (
+                      <option key={c.id} value={c.id} className="bg-slate-950 text-white py-1">
+                        {c.name} {c.code ? `[${c.code}]` : ''} ({c.tagsPerSite} Tag • {c.roundsPerShift} Giri)
+                      </option>
+                    ))}
+                  </select>
+                  <i className="fas fa-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-sky-400/60 pointer-events-none text-[9px]"></i>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={saveCurrentToClientExplicit}
+                  className="px-2.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 active:scale-95 border border-emerald-400/40 text-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shrink-0 shadow-[0_0_10px_rgba(16,185,129,0.15)]"
+                  title="Salva modifiche correnti sul profilo di questo cliente"
+                >
+                  <i className="fas fa-save text-xs"></i>
+                  <span className="hidden sm:inline text-[10px]">Salva</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleDuplicateClient(selectedClientId)}
+                  className="w-7 h-7 bg-slate-800/80 hover:bg-slate-700 active:scale-95 border border-slate-700 text-slate-300 rounded-lg flex items-center justify-center transition-all cursor-pointer shrink-0"
+                  title="Duplica questo cliente"
+                >
+                  <i className="fas fa-copy text-[10px]"></i>
+                </button>
+              </div>
+
+              {/* Dettaglio riassuntivo cliente attivo */}
+              <div className="flex items-center justify-between text-[9px] text-slate-400 pt-1 border-t border-sky-500/10">
+                <div className="truncate max-w-[210px] italic text-slate-300">
+                  {activeClient?.notes || `${config.tagsPerSite} tag configurati • Notte ${config.nightStart}-${config.nightEnd}`}
+                </div>
+                {saveStatusMessage ? (
+                  <span className="text-emerald-400 font-bold text-[8px] flex items-center gap-1 animate-pulse">
+                    <i className="fas fa-check-circle"></i> {saveStatusMessage}
+                  </span>
+                ) : (
+                  <span className="text-[8px] font-mono text-sky-400/70">
+                    {activeClient?.code || 'ATTIVO'}
+                  </span>
+                )}
+              </div>
+            </div>
+
             {/* TASTATURA DI COMMUTAZIONE PARAMETRI */}
             <div className="grid grid-cols-4 gap-1 p-1 bg-slate-900/80 rounded-xl border border-sky-500/10 mb-6">
               <button
@@ -852,31 +1434,50 @@ const App: React.FC = () => {
 
         <div className="lg:col-span-8 flex flex-col gap-6">
           {/* DASHBOARD STATS */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="glass p-4 rounded-xl border-l-4 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.1)]">
+              <span className="block text-[10px] text-amber-400 font-bold uppercase mb-1 flex items-center gap-1.5">
+                <i className="fas fa-building text-xs"></i> Cliente Attivo
+              </span>
+              <span className="text-base font-orbitron font-bold text-white truncate block" title={config.clientName || 'Cliente'}>
+                {config.clientName || 'Cliente'}
+              </span>
+              <span className="text-[9px] text-slate-400 block mt-0.5 font-mono">
+                {config.tagsPerSite} Tag • {config.roundsPerShift} Giri/Turno
+              </span>
+            </div>
+
             <div className="glass p-4 rounded-xl border-l-4 border-sky-500">
               <span className="block text-[10px] text-sky-500 font-bold uppercase mb-1">Passaggi Caricati REALI</span>
               <span className="text-2xl font-orbitron text-white">{logs.filter(l => !l.isGenerated).length}</span>
             </div>
+
             <div className="glass p-4 rounded-xl border-l-4 border-emerald-500">
               <span className="block text-[10px] text-emerald-500 font-bold uppercase mb-1">Passaggi INTEGRATI DA SISTEMA</span>
               <span className="text-2xl font-orbitron text-white">{logs.filter(l => l.isGenerated).length}</span>
             </div>
+
             <div className="glass p-4 rounded-xl border-l-4 border-indigo-500">
               <span className="block text-[10px] text-indigo-500 font-bold uppercase mb-1">Stato Operativo</span>
-              <span className="text-xs text-slate-405 italic leading-snug line-clamp-2">{aiSummary || "Nessun dato caricato nel sistema"}</span>
+              <span className="text-xs text-slate-300 italic leading-snug line-clamp-2">{aiSummary || "Pronto per l'elaborazione"}</span>
             </div>
           </div>
 
           <Card title="Database Ispezioni Integrato" icon="fas fa-database" className="flex-1 flex flex-col min-h-[600px]">
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-[10px] text-slate-500 font-mono uppercase tracking-widest">Visualizzazione Tabella</span>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-slate-400 font-mono uppercase tracking-widest">Visualizzazione Tabella</span>
+                <span className="text-[10px] font-bold text-sky-300 px-2.5 py-0.5 rounded-full bg-sky-500/10 border border-sky-400/20">
+                  <i className="fas fa-building mr-1 text-[9px]"></i> {config.clientName || 'Cliente'}
+                </span>
+              </div>
               <button 
                 type="button"
                 onClick={exportToExcel} 
                 disabled={logs.length === 0} 
-                className="cursor-pointer bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold py-1 px-4 rounded transition-all disabled:opacity-30"
+                className="cursor-pointer bg-emerald-500/15 hover:bg-emerald-500/25 active:scale-95 border border-emerald-500/40 text-emerald-300 text-xs font-bold py-1.5 px-4 rounded-lg transition-all disabled:opacity-30 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
               >
-                <i className="fas fa-download mr-2"></i> Scarica Report Excel
+                <i className="fas fa-file-excel mr-2 text-emerald-400"></i> Scarica Report Excel ({config.clientName})
               </button>
             </div>
             <div className="flex-1 overflow-auto border border-sky-500/10 rounded-xl bg-black/30">
@@ -899,17 +1500,17 @@ const App: React.FC = () => {
                       <tr key={i} className="hover:bg-sky-500/5 transition-colors">
                         <td className="px-4 py-2 font-mono text-slate-400">{l.date.split('-').reverse().join('/')}</td>
                         <td className={`px-4 py-2 font-bold ${isWeekend ? 'text-emerald-400' : 'text-slate-400'}`}>{dayLabel}</td>
-                        <td className="px-4 py-2 font-mono text-sky-450 font-bold">{l.time.substring(0, 5)}</td>
+                        <td className="px-4 py-2 font-mono text-sky-400 font-bold">{l.time.substring(0, 5)}</td>
                         <td className="px-4 py-2 text-slate-100 font-medium">{l.tag}</td>
                         <td className="px-4 py-2 text-right">
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${l.isGenerated ? 'text-emerald-450 bg-emerald-400/15' : 'text-sky-450 bg-sky-400/15'}`}>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${l.isGenerated ? 'text-emerald-400 bg-emerald-400/15' : 'text-sky-400 bg-sky-400/15'}`}>
                             {l.isGenerated ? 'SISTEMA (INTEGRATO)' : 'REALE'}
                           </span>
                         </td>
                       </tr>
                     );
                   }) : (
-                    <tr><td colSpan={5} className="py-32 text-center opacity-25 uppercase tracking-[0.3em] text-xs">Caricare un file TXT per iniziare l'editing</td></tr>
+                    <tr><td colSpan={5} className="py-32 text-center opacity-30 uppercase tracking-[0.3em] text-xs">Caricare un file TXT per iniziare l'editing per {config.clientName}</td></tr>
                   )}
                 </tbody>
               </table>
@@ -917,6 +1518,455 @@ const App: React.FC = () => {
           </Card>
         </div>
       </main>
+
+      {/* MODALE: CREAZIONE NUOVO CLIENTE */}
+      {showNewClientModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-slate-900 border border-sky-500/30 rounded-2xl w-full max-w-md p-6 shadow-[0_0_40px_rgba(14,165,233,0.3)] space-y-4">
+            <div className="flex justify-between items-center border-b border-sky-500/20 pb-3">
+              <h3 className="text-lg font-orbitron font-bold text-sky-200 flex items-center gap-2">
+                <i className="fas fa-plus-circle text-sky-400"></i>
+                Nuovo Profilo Cliente
+              </h3>
+              <button 
+                onClick={() => setShowNewClientModal(false)}
+                className="text-slate-400 hover:text-white p-1"
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+
+            <div className="space-y-3.5">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                  Nome Cliente / Postazione *
+                </label>
+                <input 
+                  type="text"
+                  value={newClientName}
+                  onChange={(e) => setNewClientName(e.target.value)}
+                  placeholder="Es: Deposito Doganale Est"
+                  className="w-full bg-slate-950 border border-sky-500/20 focus:border-sky-400 rounded-lg px-3 py-2 text-sm text-white outline-none"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                  Codice Identificativo (Opzionale)
+                </label>
+                <input 
+                  type="text"
+                  value={newClientCode}
+                  onChange={(e) => setNewClientCode(e.target.value)}
+                  placeholder="Es: CLI-004"
+                  className="w-full bg-slate-950 border border-sky-500/20 focus:border-sky-400 rounded-lg px-3 py-2 text-sm text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                  Note / Descrizione del Servizio
+                </label>
+                <textarea 
+                  rows={2}
+                  value={newClientNotes}
+                  onChange={(e) => setNewClientNotes(e.target.value)}
+                  placeholder="Es: Ispezione banchine e porte emergenza, ronda notturna"
+                  className="w-full bg-slate-950 border border-sky-500/20 focus:border-sky-400 rounded-lg px-3 py-2 text-sm text-white outline-none resize-none"
+                />
+              </div>
+
+              <div className="p-3 bg-sky-500/5 border border-sky-500/10 rounded-xl space-y-2">
+                <span className="text-[10px] font-bold uppercase text-sky-300 block">
+                  Configurazione Iniziale di Giri, Orari e Tag:
+                </span>
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+                  <input 
+                    type="radio"
+                    name="clientInitMode"
+                    checked={newClientCopyCurrent}
+                    onChange={() => setNewClientCopyCurrent(true)}
+                    className="accent-sky-500"
+                  />
+                  <span>Duplica impostazioni attuali (<b>{config.clientName}</b>)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+                  <input 
+                    type="radio"
+                    name="clientInitMode"
+                    checked={!newClientCopyCurrent}
+                    onChange={() => setNewClientCopyCurrent(false)}
+                    className="accent-sky-500"
+                  />
+                  <span>Inizia con modello base standard</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-sky-500/10">
+              <button 
+                type="button"
+                onClick={() => setShowNewClientModal(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white bg-slate-800 rounded-lg transition-all"
+              >
+                Annulla
+              </button>
+              <button 
+                type="button"
+                onClick={handleCreateNewClient}
+                disabled={!newClientName.trim()}
+                className="px-5 py-2 text-xs font-bold text-white bg-sky-500 hover:bg-sky-400 rounded-lg transition-all shadow-[0_0_15px_rgba(14,165,233,0.3)] disabled:opacity-40"
+              >
+                Crea & Attiva Profilo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODALE: ARCHIVIO & GESTIONE COMPLETA PROFILI CLIENTI */}
+      {showManageClientsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+          <div className="bg-slate-900 border border-sky-500/30 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-[0_0_50px_rgba(14,165,233,0.35)]">
+            {/* Header del modale */}
+            <div className="p-5 border-b border-sky-500/20 flex justify-between items-center bg-slate-950/40 rounded-t-2xl">
+              <div>
+                <h3 className="text-xl font-orbitron font-bold text-sky-200 flex items-center gap-2.5">
+                  <i className="fas fa-folder-open text-sky-400"></i>
+                  Archivio Profili Clienti & Postazioni
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Ogni cliente conserva la propria configurazione specifica di giri, fasce orarie, turni e punti tag.
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowManageClientsModal(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <i className="fas fa-times text-sm"></i>
+              </button>
+            </div>
+
+            {/* Banner notifiche/stato Archivio */}
+            {archiveStatusMessage && (
+              <div className={`mx-5 mt-4 p-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 animate-fadeIn ${
+                archiveStatusMessage.type === 'success' 
+                  ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-300' 
+                  : 'bg-red-500/15 border-red-400/40 text-red-300'
+              }`}>
+                <div className="flex items-center gap-2">
+                  <i className={`fas ${archiveStatusMessage.type === 'success' ? 'fa-check-circle text-emerald-400' : 'fa-exclamation-circle text-red-400'}`}></i>
+                  <span>{archiveStatusMessage.text}</span>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={() => setArchiveStatusMessage(null)}
+                  className="text-slate-400 hover:text-white p-1"
+                >
+                  <i className="fas fa-times text-xs"></i>
+                </button>
+              </div>
+            )}
+
+            {/* Azioni rapide Archivio (Import/Export/Nuovo) */}
+            <div className="p-4 border-b border-sky-500/10 bg-slate-900/60 flex flex-wrap justify-between items-center gap-2">
+              <span className="text-xs font-mono text-slate-300">
+                Clienti registrati: <b className="text-sky-400">{clients.length}</b>
+              </span>
+              <div className="flex items-center gap-2">
+                <button 
+                  type="button"
+                  onClick={handleExportClientsJson}
+                  className="px-3 py-1.5 text-xs font-bold text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-400/30 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
+                  title="Esporta un file JSON con tutti i clienti e le loro configurazioni"
+                >
+                  <i className="fas fa-file-export"></i> Esporta Backup (JSON)
+                </button>
+
+                <label className="px-3 py-1.5 text-xs font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer">
+                  <i className="fas fa-file-import"></i> Importa Backup (JSON)
+                  <input type="file" accept=".json" onChange={handleImportClientsJson} className="hidden" />
+                </label>
+
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setShowManageClientsModal(false);
+                    setNewClientName('');
+                    setNewClientCode(`CLI-${String(clients.length + 1).padStart(3, '0')}`);
+                    setNewClientNotes('');
+                    setNewClientCopyCurrent(true);
+                    setShowNewClientModal(true);
+                  }}
+                  className="px-3 py-1.5 text-xs font-bold text-white bg-sky-500 hover:bg-sky-400 rounded-lg flex items-center gap-1.5 transition-all shadow-[0_0_10px_rgba(14,165,233,0.3)] cursor-pointer"
+                >
+                  <i className="fas fa-plus"></i> + Nuovo Cliente
+                </button>
+              </div>
+            </div>
+
+            {/* Elenco dei profili */}
+            <div className="p-5 overflow-y-auto space-y-3.5 flex-1">
+              {clients.map((client) => {
+                const isSelected = client.id === selectedClientId;
+                return (
+                  <div 
+                    key={client.id}
+                    className={`p-4 rounded-xl border transition-all ${
+                      isSelected 
+                        ? 'bg-sky-500/10 border-sky-400 shadow-[0_0_20px_rgba(14,165,233,0.15)]' 
+                        : 'bg-black/30 border-slate-800 hover:border-sky-500/30 hover:bg-black/40'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-white/5">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${isSelected ? 'bg-sky-500 text-white shadow-[0_0_10px_rgba(14,165,233,0.5)]' : 'bg-slate-800 text-slate-400'}`}>
+                          <i className="fas fa-building"></i>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-orbitron font-bold text-white">{client.name}</h4>
+                            {client.code && (
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-400/20 font-bold">
+                                {client.code}
+                              </span>
+                            )}
+                            {isSelected && (
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 uppercase tracking-wider animate-pulse">
+                                In Uso
+                              </span>
+                            )}
+                          </div>
+                          {client.notes && (
+                            <p className="text-xs text-slate-400 mt-0.5 italic">{client.notes}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Azioni per cliente */}
+                      <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                        {!isSelected && (
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              handleSelectClient(client.id);
+                              setShowManageClientsModal(false);
+                            }}
+                            className="px-3 py-1 bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/40 text-sky-300 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                          >
+                            <i className="fas fa-check"></i> Attiva
+                          </button>
+                        )}
+                        <button 
+                          type="button"
+                          onClick={() => setEditingClient(client)}
+                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-xs transition-all cursor-pointer"
+                          title="Rinomina e modifica note"
+                        >
+                          <i className="fas fa-edit"></i>
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => handleDuplicateClient(client.id)}
+                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-xs transition-all cursor-pointer"
+                          title="Duplica cliente"
+                        >
+                          <i className="fas fa-copy"></i>
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => handleDeleteClick(client)}
+                          disabled={clients.length <= 1}
+                          className="px-2.5 py-1 bg-slate-800 hover:bg-red-950/80 hover:text-red-400 border border-slate-700 hover:border-red-500/50 text-slate-400 rounded-lg text-xs transition-all cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed flex items-center gap-1.5"
+                          title={clients.length <= 1 ? "Impossibile eliminare l'unico cliente presente in archivio" : `Elimina ${client.name}`}
+                        >
+                          <i className="fas fa-trash-alt text-red-400/80"></i>
+                          <span className="hidden sm:inline text-[11px] font-medium">Elimina</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Scheda di sintesi configurazione del cliente */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 text-[10px]">
+                      <div className="bg-black/30 p-2 rounded-lg border border-white/5">
+                        <span className="text-slate-400 block font-bold mb-0.5">🌙 Turno Notte</span>
+                        <span className="text-white font-mono">{client.nightStart} - {client.nightEnd}</span>
+                        <span className="text-sky-400 block font-bold mt-0.5">({client.roundsPerShift} giri/notte)</span>
+                      </div>
+
+                      <div className="bg-black/30 p-2 rounded-lg border border-white/5">
+                        <span className="text-slate-400 block font-bold mb-0.5">☀️ Turni Diurni</span>
+                        <span className="text-slate-300 block">
+                          M: {client.dayShift1Enabled ? `${client.dayShift1Start}-${client.dayShift1End}` : 'Disattivo'}
+                        </span>
+                        <span className="text-slate-300 block">
+                          P: {client.dayShift2Enabled ? `${client.dayShift2Start}-${client.dayShift2End}` : 'Disattivo'}
+                        </span>
+                      </div>
+
+                      <div className="bg-black/30 p-2 rounded-lg border border-white/5">
+                        <span className="text-slate-400 block font-bold mb-0.5">🏷️ Tag Ispezione ({client.tagsPerSite})</span>
+                        <span className="text-slate-300 line-clamp-2" title={client.tagNames.join(' • ')}>
+                          {client.tagNames.slice(0, 2).join(' • ')} {client.tagNames.length > 2 ? `(+${client.tagNames.length - 2})` : ''}
+                        </span>
+                      </div>
+
+                      <div className="bg-black/30 p-2 rounded-lg border border-white/5">
+                        <span className="text-slate-400 block font-bold mb-0.5">📅 Weekend Programmati</span>
+                        <span className="text-emerald-400 block">
+                          Sab: {client.saturdayConfig.nightEnabled ? `${client.saturdayConfig.nightRounds ?? client.saturdayConfig.rounds ?? 3}N ` : ''}
+                          {client.saturdayConfig.day1Enabled ? `${client.saturdayConfig.day1Rounds ?? 1}M ` : ''}
+                          {client.saturdayConfig.day2Enabled ? `${client.saturdayConfig.day2Rounds ?? 1}P` : ''}
+                        </span>
+                        <span className="text-emerald-400 block">
+                          Dom: {client.sundayConfig.nightEnabled ? `${client.sundayConfig.nightRounds ?? client.sundayConfig.rounds ?? 3}N ` : ''}
+                          {client.sundayConfig.day1Enabled ? `${client.sundayConfig.day1Rounds ?? 1}M ` : ''}
+                          {client.sundayConfig.day2Enabled ? `${client.sundayConfig.day2Rounds ?? 1}P` : ''}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer modale */}
+            <div className="p-4 border-t border-sky-500/20 bg-slate-950/40 rounded-b-2xl flex justify-end">
+              <button 
+                type="button"
+                onClick={() => setShowManageClientsModal(false)}
+                className="px-5 py-2 bg-sky-500 hover:bg-sky-400 text-white rounded-lg text-xs font-bold transition-all"
+              >
+                Chiudi Archivio
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODALE: MODIFICA DATI RAPIDI CLIENTE (NOME / NOTE) */}
+      {editingClient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-slate-900 border border-sky-500/30 rounded-2xl w-full max-w-md p-6 shadow-[0_0_40px_rgba(14,165,233,0.3)] space-y-4">
+            <div className="flex justify-between items-center border-b border-sky-500/20 pb-3">
+              <h3 className="text-base font-orbitron font-bold text-sky-200">
+                Modifica Intestazione Cliente
+              </h3>
+              <button onClick={() => setEditingClient(null)} className="text-slate-400 hover:text-white p-1">
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                  Nome Cliente
+                </label>
+                <input 
+                  type="text"
+                  value={editingClient.name}
+                  onChange={(e) => setEditingClient({ ...editingClient, name: e.target.value })}
+                  className="w-full bg-slate-950 border border-sky-500/20 focus:border-sky-400 rounded-lg px-3 py-2 text-sm text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                  Codice Identificativo
+                </label>
+                <input 
+                  type="text"
+                  value={editingClient.code || ''}
+                  onChange={(e) => setEditingClient({ ...editingClient, code: e.target.value })}
+                  className="w-full bg-slate-950 border border-sky-500/20 focus:border-sky-400 rounded-lg px-3 py-2 text-sm text-white outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                  Note / Descrizione
+                </label>
+                <textarea 
+                  rows={2}
+                  value={editingClient.notes || ''}
+                  onChange={(e) => setEditingClient({ ...editingClient, notes: e.target.value })}
+                  className="w-full bg-slate-950 border border-sky-500/20 focus:border-sky-400 rounded-lg px-3 py-2 text-sm text-white outline-none resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-sky-500/10">
+              <button 
+                type="button"
+                onClick={() => setEditingClient(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white bg-slate-800 rounded-lg transition-all"
+              >
+                Annulla
+              </button>
+              <button 
+                type="button"
+                onClick={() => handleUpdateClientInfo(editingClient.id, editingClient.name, editingClient.code || '', editingClient.notes || '')}
+                className="px-5 py-2 text-xs font-bold text-white bg-sky-500 hover:bg-sky-400 rounded-lg transition-all"
+              >
+                Salva Modifiche
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODALE: CONFERMA ELIMINAZIONE PROFILO CLIENTE */}
+      {clientToDelete && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-slate-900 border border-red-500/40 rounded-2xl w-full max-w-md p-6 shadow-[0_0_50px_rgba(239,68,68,0.35)] space-y-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                <i className="fas fa-exclamation-triangle text-lg"></i>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-orbitron font-bold text-red-200">
+                  Elimina Profilo Cliente
+                </h3>
+                <p className="text-xs text-slate-300 mt-1">
+                  Sei sicuro di voler eliminare definitivamente il profilo di <strong className="text-white font-semibold">"{clientToDelete.name}"</strong>?
+                </p>
+                {clientToDelete.code && (
+                  <span className="inline-block mt-1 text-[10px] font-mono px-2 py-0.5 rounded bg-red-500/10 text-red-300 border border-red-400/20">
+                    Codice: {clientToDelete.code}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3.5 text-xs text-red-300/90 space-y-1.5">
+              <p className="font-semibold text-red-200 flex items-center gap-1.5">
+                <i className="fas fa-info-circle text-xs"></i> Azione Irreversibile
+              </p>
+              <p className="text-[11px] leading-relaxed">
+                Tutte le configurazioni associate a questa postazione (giri richiesti feriali e weekend, fasce orarie, turni e punti tag di ispezione) verranno rimosse dall'archivio locale.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setClientToDelete(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-all cursor-pointer"
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteClient}
+                className="px-5 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-500 rounded-lg transition-all shadow-[0_0_15px_rgba(239,68,68,0.4)] flex items-center gap-2 cursor-pointer active:scale-95"
+              >
+                <i className="fas fa-trash-alt"></i> Elimina Definitivamente
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

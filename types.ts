@@ -25,7 +25,34 @@ export interface CustomRoundSlot {
   daysFilter?: 'all' | 'weekdays' | 'weekend';
 }
 
+export interface ClientProfile {
+  id: string;
+  name: string;
+  code?: string;
+  notes?: string;
+  roundsPerShift: number;
+  tagsPerSite: number;
+  nightShiftEnabled: boolean;
+  dayShift1Enabled: boolean;
+  dayShift2Enabled: boolean;
+  nightStart: string;
+  nightEnd: string;
+  dayShift1Start: string;
+  dayShift1End: string;
+  dayShift2Start: string;
+  dayShift2End: string;
+  tagNames: string[];
+  tagIntervalMin: number;
+  tagIntervalMax: number;
+  saturdayConfig: DayConfig;
+  sundayConfig: DayConfig;
+  customRoundSlotsEnabled?: boolean;
+  customRoundSlots?: CustomRoundSlot[];
+}
+
 export interface SiteConfig {
+  clientId?: string;
+  clientName?: string;
   month: number;
   year: number;
   roundsPerShift: number;
