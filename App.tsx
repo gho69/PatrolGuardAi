@@ -1,7 +1,27 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { parsePatrolFile } from './utils/parser';
 import { generateMissingData } from './utils/generator';
 import { PatrolLog, SiteConfig, ReportData, DayConfig, CustomRoundSlot, ClientProfile } from './types';
+import { DEFAULT_CLIENTS } from './defaultClients';
+import { 
+  getInitialClients, 
+  getInitialSelectedClientId, 
+  persistClients, 
+  persistSelectedClientId, 
+  fetchRemoteClients,
+  fetchRemoteActiveClientId
+} from './utils/storage';
+import { 
+  auth, 
+  loginWithGoogle, 
+  logoutUser, 
+  subscribeUserClients, 
+  saveClientToFirestore, 
+  deleteClientFromFirestore, 
+  saveActiveClientIdToFirestore, 
+  seedInitialClientsIfEmpty 
+} from './firebase';
+import { onAuthStateChanged, User } from 'firebase/auth';
 
 const Card: React.FC<{ children: React.ReactNode, title?: string, icon?: string, className?: string }> = ({ children, title, icon, className = "" }) => (
   <div className={`glass p-6 rounded-2xl neon-border transition-all duration-300 ${className}`}>
@@ -67,128 +87,22 @@ const NumericStepper: React.FC<{
   );
 };
 
-const DEFAULT_CLIENTS: ClientProfile[] = [
-  {
-    id: 'granarolo',
-    name: 'Sede Uffici Granarolo',
-    code: 'CLI-001',
-    notes: 'Presidio notturno Lun-Ven (1 giro), weekend con ronda notturna intensiva (3 giri).',
-    roundsPerShift: 1,
-    tagsPerSite: 2,
-    tagNames: [
-      'Ispezione: 1 INGRESSO UFFICI',
-      'Ispezione: 2 VIA GRANAROLO'
-    ],
-    tagIntervalMin: 2,
-    tagIntervalMax: 5,
-    nightShiftEnabled: true,
-    dayShift1Enabled: false,
-    dayShift2Enabled: false,
-    nightStart: '23:00',
-    nightEnd: '06:00',
-    dayShift1Start: '06:00',
-    dayShift1End: '14:00',
-    dayShift2Start: '14:00',
-    dayShift2End: '22:00',
-    saturdayConfig: { nightEnabled: true, day1Enabled: false, day2Enabled: false, rounds: 3, nightRounds: 3, day1Rounds: 1, day2Rounds: 1 },
-    sundayConfig: { nightEnabled: true, day1Enabled: false, day2Enabled: false, rounds: 3, nightRounds: 3, day1Rounds: 1, day2Rounds: 1 },
-    customRoundSlotsEnabled: false,
-    customRoundSlots: [
-      { id: '1', name: '1° Giro Notturno', startTime: '00:00', endTime: '01:00', enabled: true, daysFilter: 'all' },
-      { id: '2', name: '2° Giro Notturno', startTime: '02:00', endTime: '03:00', enabled: true, daysFilter: 'all' },
-      { id: '3', name: 'Apertura Obbligatoria', startTime: '04:30', endTime: '05:00', enabled: true, daysFilter: 'all' }
-    ]
-  },
-  {
-    id: 'logistica',
-    name: 'Hub Logistico Interporto',
-    code: 'CLI-002',
-    notes: 'Magazzini e banchine merci. 2 giri notturni, operatività continua weekend giorno e notte.',
-    roundsPerShift: 2,
-    tagsPerSite: 4,
-    tagNames: [
-      'Punto 1: Banchine Carico 1-8',
-      'Punto 2: Varco Carraio Nord',
-      'Punto 3: Recinzione Perimetrale Ovest',
-      'Punto 4: Cabina Elettrica & Gruppo'
-    ],
-    tagIntervalMin: 3,
-    tagIntervalMax: 7,
-    nightShiftEnabled: true,
-    dayShift1Enabled: false,
-    dayShift2Enabled: false,
-    nightStart: '22:00',
-    nightEnd: '06:00',
-    dayShift1Start: '06:00',
-    dayShift1End: '14:00',
-    dayShift2Start: '14:00',
-    dayShift2End: '22:00',
-    saturdayConfig: { nightEnabled: true, day1Enabled: true, day2Enabled: true, rounds: 2, nightRounds: 2, day1Rounds: 2, day2Rounds: 2 },
-    sundayConfig: { nightEnabled: true, day1Enabled: true, day2Enabled: true, rounds: 2, nightRounds: 2, day1Rounds: 2, day2Rounds: 2 },
-    customRoundSlotsEnabled: false,
-    customRoundSlots: [
-      { id: '1', name: 'Controllo Banchine', startTime: '23:00', endTime: '00:30', enabled: true, daysFilter: 'all' },
-      { id: '2', name: 'Ronda Perimetrale', startTime: '03:00', endTime: '04:30', enabled: true, daysFilter: 'all' }
-    ]
-  },
-  {
-    id: 'commerciale',
-    name: 'Centro Commerciale Le Cupole',
-    code: 'CLI-003',
-    notes: 'Galleria commerciale e parcheggi: 3 ispezioni notturne con apertura varchi programmata alle 05:45.',
-    roundsPerShift: 3,
-    tagsPerSite: 3,
-    tagNames: [
-      'Galleria Negozi Livello 0',
-      'Uscite di Sicurezza Retro',
-      'Parcheggio Sotterraneo Settore B'
-    ],
-    tagIntervalMin: 2,
-    tagIntervalMax: 5,
-    nightShiftEnabled: true,
-    dayShift1Enabled: false,
-    dayShift2Enabled: false,
-    nightStart: '21:30',
-    nightEnd: '06:30',
-    dayShift1Start: '06:30',
-    dayShift1End: '14:30',
-    dayShift2Start: '14:30',
-    dayShift2End: '21:30',
-    saturdayConfig: { nightEnabled: true, day1Enabled: false, day2Enabled: false, rounds: 3, nightRounds: 3, day1Rounds: 1, day2Rounds: 1 },
-    sundayConfig: { nightEnabled: true, day1Enabled: true, day2Enabled: false, rounds: 3, nightRounds: 3, day1Rounds: 2, day2Rounds: 1 },
-    customRoundSlotsEnabled: true,
-    customRoundSlots: [
-      { id: '1', name: 'Ispezione Chiusura', startTime: '22:00', endTime: '23:15', enabled: true, daysFilter: 'all' },
-      { id: '2', name: 'Controllo Notturno', startTime: '02:00', endTime: '03:30', enabled: true, daysFilter: 'all' },
-      { id: '3', name: 'Apertura Varchi Staff', startTime: '05:45', endTime: '06:30', enabled: true, daysFilter: 'all' }
-    ]
-  }
-];
-
 const App: React.FC = () => {
   const [logs, setLogs] = useState<PatrolLog[]>([]);
   const [activeTab, setActiveTab] = useState<'base' | 'shifts' | 'slots' | 'weekend'>('base');
 
-  // Gestione profili clienti salvati in memoria/localStorage
+  // Firebase Auth e sincronizzazione cloud multi-utente
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
+
+  // Gestione profili clienti con multi-storage persistente (Firebase Firestore, Server API, LocalStorage, IndexedDB)
   const [clients, setClients] = useState<ClientProfile[]>(() => {
-    try {
-      const saved = localStorage.getItem('patrolguard_clients_v2');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.error('Errore nel caricamento dei clienti salvati', e);
-    }
-    return DEFAULT_CLIENTS;
+    return getInitialClients();
   });
 
   const [selectedClientId, setSelectedClientId] = useState<string>(() => {
-    try {
-      const savedId = localStorage.getItem('patrolguard_selected_client_id');
-      if (savedId) return savedId;
-    } catch (e) {}
-    return DEFAULT_CLIENTS[0].id;
+    const initialList = getInitialClients();
+    return getInitialSelectedClientId(initialList);
   });
 
   const activeClient = useMemo(() => {
@@ -237,8 +151,146 @@ const App: React.FC = () => {
     };
   });
 
-  // Sincronizzazione automatica della configurazione corrente sul profilo cliente attivo in localStorage
+  // Sincronizzazione asincrona con Server API (/api/clients, /api/clients/active) e IndexedDB
   useEffect(() => {
+    Promise.all([fetchRemoteClients(), fetchRemoteActiveClientId()]).then(([remote, remoteActiveId]) => {
+      if (remote && Array.isArray(remote) && remote.length > 0) {
+        setClients(remote);
+        const preferredId = remoteActiveId || selectedClientId;
+        const target = remote.find(c => c.id === preferredId) || remote[0];
+        if (target) {
+          setSelectedClientId(target.id);
+          setConfig(prev => ({
+            ...prev,
+            clientId: target.id,
+            clientName: target.name,
+            roundsPerShift: target.roundsPerShift,
+            tagsPerSite: target.tagsPerSite,
+            tagNames: [...target.tagNames],
+            tagIntervalMin: target.tagIntervalMin,
+            tagIntervalMax: target.tagIntervalMax,
+            nightShiftEnabled: target.nightShiftEnabled,
+            nightStart: target.nightStart,
+            nightEnd: target.nightEnd,
+            dayShift1Enabled: target.dayShift1Enabled,
+            dayShift1Start: target.dayShift1Start,
+            dayShift1End: target.dayShift1End,
+            dayShift2Enabled: target.dayShift2Enabled,
+            dayShift2Start: target.dayShift2Start,
+            dayShift2End: target.dayShift2End,
+            saturdayConfig: { ...target.saturdayConfig },
+            sundayConfig: { ...target.sundayConfig },
+            customRoundSlotsEnabled: target.customRoundSlotsEnabled ?? false,
+            customRoundSlots: target.customRoundSlots ? [...target.customRoundSlots] : []
+          }));
+        }
+      }
+    });
+  }, []);
+
+  // Sottoscrizione Firebase Auth e sincronizzazione real-time Firestore
+  useEffect(() => {
+    let unsubscribeFirestore: (() => void) | null = null;
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        try {
+          // Se Firestore per questo utente è ancora vuoto, inizializza con i clienti correnti
+          await seedInitialClientsIfEmpty(user.uid, clients);
+        } catch (e) {
+          console.warn('Inizializzazione cloud Firebase:', e);
+        }
+
+        if (unsubscribeFirestore) unsubscribeFirestore();
+        unsubscribeFirestore = subscribeUserClients(
+          user.uid,
+          (remoteClients) => {
+            if (remoteClients && remoteClients.length > 0) {
+              setClients(remoteClients);
+              persistClients(remoteClients);
+              setSelectedClientId((prevId) => {
+                const target = remoteClients.find(c => c.id === prevId) || remoteClients[0];
+                if (target) {
+                  setConfig(prev => ({
+                    ...prev,
+                    clientId: target.id,
+                    clientName: target.name,
+                    roundsPerShift: target.roundsPerShift,
+                    tagsPerSite: target.tagsPerSite,
+                    tagNames: [...target.tagNames],
+                    tagIntervalMin: target.tagIntervalMin,
+                    tagIntervalMax: target.tagIntervalMax,
+                    nightShiftEnabled: target.nightShiftEnabled,
+                    nightStart: target.nightStart,
+                    nightEnd: target.nightEnd,
+                    dayShift1Enabled: target.dayShift1Enabled,
+                    dayShift1Start: target.dayShift1Start,
+                    dayShift1End: target.dayShift1End,
+                    dayShift2Enabled: target.dayShift2Enabled,
+                    dayShift2Start: target.dayShift2Start,
+                    dayShift2End: target.dayShift2End,
+                    saturdayConfig: { ...target.saturdayConfig },
+                    sundayConfig: { ...target.sundayConfig },
+                    customRoundSlotsEnabled: target.customRoundSlotsEnabled ?? false,
+                    customRoundSlots: target.customRoundSlots ? [...target.customRoundSlots] : []
+                  }));
+                  return target.id;
+                }
+                return prevId;
+              });
+            }
+          },
+          (err) => {
+            console.error('Errore realtime Firestore:', err);
+          }
+        );
+      } else {
+        if (unsubscribeFirestore) {
+          unsubscribeFirestore();
+          unsubscribeFirestore = null;
+        }
+      }
+    });
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeFirestore) unsubscribeFirestore();
+    };
+  }, []);
+
+  const handleGoogleLogin = async () => {
+    setIsLoggingIn(true);
+    try {
+      const user = await loginWithGoogle();
+      if (user) {
+        setCurrentUser(user);
+        setSaveStatusMessage(`Cloud sincronizzato: ${user.email}`);
+        await seedInitialClientsIfEmpty(user.uid, clients);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setSaveStatusMessage(`Accesso annullato o non riuscito`);
+    } finally {
+      setIsLoggingIn(false);
+      setTimeout(() => setSaveStatusMessage(null), 3500);
+    }
+  };
+
+  const handleLogout = async () => {
+    await logoutUser();
+    setCurrentUser(null);
+    setSaveStatusMessage('Disconnesso da Cloud Firebase. Operazioni in locale.');
+    setTimeout(() => setSaveStatusMessage(null), 3000);
+  };
+
+  const isInitialMount = useRef(true);
+
+  // Sincronizzazione automatica della configurazione corrente sul profilo cliente attivo
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
     const currentId = config.clientId || selectedClientId;
     setClients(prev => {
       const idx = prev.findIndex(c => c.id === currentId);
@@ -267,9 +319,7 @@ const App: React.FC = () => {
         customRoundSlotsEnabled: config.customRoundSlotsEnabled,
         customRoundSlots: config.customRoundSlots ? [...config.customRoundSlots] : []
       };
-      try {
-        localStorage.setItem('patrolguard_clients_v2', JSON.stringify(updated));
-      } catch (e) {}
+      persistClients(updated);
       return updated;
     });
   }, [
@@ -300,9 +350,10 @@ const App: React.FC = () => {
     const target = clients.find(c => c.id === clientId);
     if (!target) return;
     setSelectedClientId(clientId);
-    try {
-      localStorage.setItem('patrolguard_selected_client_id', clientId);
-    } catch (e) {}
+    persistSelectedClientId(clientId);
+    if (currentUser) {
+      saveActiveClientIdToFirestore(currentUser.uid, clientId).catch(() => {});
+    }
 
     setConfig(prev => ({
       ...prev,
@@ -332,9 +383,50 @@ const App: React.FC = () => {
     setTimeout(() => setSaveStatusMessage(null), 2500);
   };
 
+  // Salvataggio manuale esplicito con scrittura garantita su disco, Cloud e archivio
   const saveCurrentToClientExplicit = () => {
-    setSaveStatusMessage(`Configurazione salvata per "${config.clientName || 'Cliente'}"!`);
-    setTimeout(() => setSaveStatusMessage(null), 2500);
+    const currentId = config.clientId || selectedClientId;
+    let savedTarget: ClientProfile | null = null;
+    setClients(prev => {
+      const idx = prev.findIndex(c => c.id === currentId);
+      if (idx === -1) return prev;
+      const current = prev[idx];
+      const updated = [...prev];
+      const updatedProfile: ClientProfile = {
+        ...current,
+        name: config.clientName || current.name,
+        roundsPerShift: config.roundsPerShift,
+        tagsPerSite: config.tagsPerSite,
+        tagNames: [...config.tagNames],
+        tagIntervalMin: config.tagIntervalMin,
+        tagIntervalMax: config.tagIntervalMax,
+        nightShiftEnabled: config.nightShiftEnabled,
+        nightStart: config.nightStart,
+        nightEnd: config.nightEnd,
+        dayShift1Enabled: config.dayShift1Enabled,
+        dayShift1Start: config.dayShift1Start,
+        dayShift1End: config.dayShift1End,
+        dayShift2Enabled: config.dayShift2Enabled,
+        dayShift2Start: config.dayShift2Start,
+        dayShift2End: config.dayShift2End,
+        saturdayConfig: { ...config.saturdayConfig },
+        sundayConfig: { ...config.sundayConfig },
+        customRoundSlotsEnabled: config.customRoundSlotsEnabled,
+        customRoundSlots: config.customRoundSlots ? [...config.customRoundSlots] : []
+      };
+      updated[idx] = updatedProfile;
+      savedTarget = updatedProfile;
+      persistClients(updated);
+      return updated;
+    });
+
+    persistSelectedClientId(currentId);
+    if (currentUser && savedTarget) {
+      saveClientToFirestore(currentUser.uid, savedTarget).catch(console.error);
+      saveActiveClientIdToFirestore(currentUser.uid, currentId).catch(() => {});
+    }
+    setSaveStatusMessage(`Configurazione salvata con successo per "${config.clientName || 'Cliente'}"!`);
+    setTimeout(() => setSaveStatusMessage(null), 3000);
   };
 
   const handleCreateNewClient = () => {
@@ -367,14 +459,20 @@ const App: React.FC = () => {
       customRoundSlots: baseSource.customRoundSlots ? [...baseSource.customRoundSlots] : []
     };
 
-    const updated = [...clients, newProfile];
-    setClients(updated);
-    try {
-      localStorage.setItem('patrolguard_clients_v2', JSON.stringify(updated));
-      localStorage.setItem('patrolguard_selected_client_id', newId);
-    } catch (e) {}
+    setClients(prev => {
+      const updated = [...prev, newProfile];
+      persistClients(updated);
+      return updated;
+    });
 
     setSelectedClientId(newId);
+    persistSelectedClientId(newId);
+
+    if (currentUser) {
+      saveClientToFirestore(currentUser.uid, newProfile).catch(console.error);
+      saveActiveClientIdToFirestore(currentUser.uid, newId).catch(() => {});
+    }
+
     setConfig(prev => ({
       ...prev,
       clientId: newProfile.id,
@@ -403,8 +501,8 @@ const App: React.FC = () => {
     setNewClientName('');
     setNewClientCode('');
     setNewClientNotes('');
-    setSaveStatusMessage(`Cliente "${name}" creato e attivato!`);
-    setTimeout(() => setSaveStatusMessage(null), 3000);
+    setSaveStatusMessage(`Cliente "${name}" creato e attivato con successo!`);
+    setTimeout(() => setSaveStatusMessage(null), 3500);
   };
 
   const handleDuplicateClient = (targetId: string) => {
@@ -422,12 +520,46 @@ const App: React.FC = () => {
       customRoundSlots: source.customRoundSlots ? [...source.customRoundSlots] : []
     };
 
-    const updated = [...clients, duplicated];
-    setClients(updated);
-    try {
-      localStorage.setItem('patrolguard_clients_v2', JSON.stringify(updated));
-    } catch (e) {}
-    handleSelectClient(newId);
+    setClients(prev => {
+      const updated = [...prev, duplicated];
+      persistClients(updated);
+      return updated;
+    });
+
+    setSelectedClientId(newId);
+    persistSelectedClientId(newId);
+
+    if (currentUser) {
+      saveClientToFirestore(currentUser.uid, duplicated).catch(console.error);
+      saveActiveClientIdToFirestore(currentUser.uid, newId).catch(() => {});
+    }
+
+    setConfig(prev => ({
+      ...prev,
+      clientId: duplicated.id,
+      clientName: duplicated.name,
+      roundsPerShift: duplicated.roundsPerShift,
+      tagsPerSite: duplicated.tagsPerSite,
+      tagNames: [...duplicated.tagNames],
+      tagIntervalMin: duplicated.tagIntervalMin,
+      tagIntervalMax: duplicated.tagIntervalMax,
+      nightShiftEnabled: duplicated.nightShiftEnabled,
+      nightStart: duplicated.nightStart,
+      nightEnd: duplicated.nightEnd,
+      dayShift1Enabled: duplicated.dayShift1Enabled,
+      dayShift1Start: duplicated.dayShift1Start,
+      dayShift1End: duplicated.dayShift1End,
+      dayShift2Enabled: duplicated.dayShift2Enabled,
+      dayShift2Start: duplicated.dayShift2Start,
+      dayShift2End: duplicated.dayShift2End,
+      saturdayConfig: { ...duplicated.saturdayConfig },
+      sundayConfig: { ...duplicated.sundayConfig },
+      customRoundSlotsEnabled: duplicated.customRoundSlotsEnabled ?? false,
+      customRoundSlots: duplicated.customRoundSlots ? [...duplicated.customRoundSlots] : []
+    }));
+
+    setSaveStatusMessage(`Cliente duplicato "${duplicated.name}" attivato!`);
+    setTimeout(() => setSaveStatusMessage(null), 3000);
   };
 
   const handleDeleteClick = (client: ClientProfile) => {
@@ -459,17 +591,17 @@ const App: React.FC = () => {
 
     const remaining = clients.filter(c => c.id !== targetId);
     setClients(remaining);
-    try {
-      localStorage.setItem('patrolguard_clients_v2', JSON.stringify(remaining));
-    } catch (e) {}
+    persistClients(remaining);
+
+    if (currentUser) {
+      deleteClientFromFirestore(currentUser.uid, targetId).catch(console.error);
+    }
 
     // Se stiamo eliminando il cliente correntemente selezionato, passiamo al primo rimanente
     if (selectedClientId === targetId || config.clientId === targetId) {
       const nextClient = remaining[0];
       setSelectedClientId(nextClient.id);
-      try {
-        localStorage.setItem('patrolguard_selected_client_id', nextClient.id);
-      } catch (e) {}
+      persistSelectedClientId(nextClient.id);
 
       setConfig(prev => ({
         ...prev,
@@ -509,13 +641,23 @@ const App: React.FC = () => {
   };
 
   const handleUpdateClientInfo = (id: string, name: string, code: string, notes: string) => {
+    let targetUpdated: ClientProfile | null = null;
     setClients(prev => {
-      const updated = prev.map(c => c.id === id ? { ...c, name, code, notes } : c);
-      try {
-        localStorage.setItem('patrolguard_clients_v2', JSON.stringify(updated));
-      } catch (e) {}
+      const updated = prev.map(c => {
+        if (c.id === id) {
+          const u = { ...c, name, code, notes };
+          targetUpdated = u;
+          return u;
+        }
+        return c;
+      });
+      persistClients(updated);
       return updated;
     });
+
+    if (currentUser && targetUpdated) {
+      saveClientToFirestore(currentUser.uid, targetUpdated).catch(console.error);
+    }
 
     if (config.clientId === id || selectedClientId === id) {
       setConfig(prev => ({ ...prev, clientName: name }));
@@ -557,9 +699,7 @@ const App: React.FC = () => {
         const data = JSON.parse(event.target?.result as string);
         if (Array.isArray(data) && data.length > 0 && data[0].name && Array.isArray(data[0].tagNames)) {
           setClients(data);
-          try {
-            localStorage.setItem('patrolguard_clients_v2', JSON.stringify(data));
-          } catch (e) {}
+          persistClients(data);
           handleSelectClient(data[0].id);
           setArchiveStatusMessage({
             type: 'success',
@@ -587,6 +727,43 @@ const App: React.FC = () => {
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const [isSyncingServer, setIsSyncingServer] = useState<boolean>(false);
+  const handleSyncFromServer = async () => {
+    setIsSyncingServer(true);
+    try {
+      const [remote, activeId] = await Promise.all([fetchRemoteClients(), fetchRemoteActiveClientId()]);
+      if (remote && Array.isArray(remote) && remote.length > 0) {
+        setClients(remote);
+        const preferredId = activeId || selectedClientId;
+        const target = remote.find(c => c.id === preferredId) || remote[0];
+        if (target) {
+          handleSelectClient(target.id);
+        }
+        setArchiveStatusMessage({
+          type: 'success',
+          text: `Sincronizzazione completata: caricati ${remote.length} clienti dall'archivio centrale!`
+        });
+        setSaveStatusMessage(`Archivio sincronizzato (${remote.length} clienti)`);
+      } else {
+        setArchiveStatusMessage({
+          type: 'error',
+          text: "Nessun dato trovato sul server o archivio centrale non aggiornato."
+        });
+      }
+    } catch {
+      setArchiveStatusMessage({
+        type: 'error',
+        text: "Impossibile collegarsi al server per la sincronizzazione."
+      });
+    } finally {
+      setIsSyncingServer(false);
+      setTimeout(() => {
+        setArchiveStatusMessage(null);
+        setSaveStatusMessage(null);
+      }, 3500);
+    }
   };
 
   const addCustomSlot = () => {
@@ -754,7 +931,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen p-4 md:p-8 flex flex-col items-center">
-      <header className="w-full max-w-7xl flex flex-col md:flex-row justify-between items-center mb-8 gap-6">
+      <header className="w-full max-w-7xl flex flex-col md:flex-row justify-between items-center mb-6 gap-6">
         <div className="flex items-center">
           <div className="w-12 h-12 bg-sky-500 rounded-lg flex items-center justify-center mr-4 shadow-[0_0_20px_rgba(14,165,233,0.5)]">
             <i className="fas fa-user-shield text-2xl text-white"></i>
@@ -763,17 +940,61 @@ const App: React.FC = () => {
             <h1 className="text-3xl font-orbitron font-black glow-text tracking-tighter uppercase">
               Patrol<span className="text-sky-400">Guard</span> Pro
             </h1>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[10px] font-mono tracking-widest text-slate-400">ENTERPRISE CLOUD SYNC</span>
+              {currentUser ? (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Firebase Cloud Attivo: {currentUser.email}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                  Modalità Locale
+                </span>
+              )}
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <label className="neon-btn text-white px-6 py-3 rounded-full cursor-pointer flex items-center font-bold uppercase text-xs tracking-widest transition-all">
+        
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Cloud Auth Widget */}
+          {currentUser ? (
+            <div className="flex items-center gap-2 bg-slate-900/90 border border-emerald-500/30 px-3 py-1.5 rounded-xl shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+              <i className="fas fa-cloud-check text-emerald-400 text-sm"></i>
+              <span className="text-xs font-mono text-emerald-300 max-w-[140px] truncate" title={currentUser.email || ''}>
+                {currentUser.email}
+              </span>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="ml-1 text-[11px] text-slate-400 hover:text-red-400 transition-colors cursor-pointer"
+                title="Disconnetti"
+              >
+                <i className="fas fa-sign-out-alt"></i>
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={isLoggingIn}
+              className="px-4 py-2 bg-gradient-to-r from-sky-500/20 to-blue-600/20 hover:from-sky-500/30 hover:to-blue-600/30 border border-sky-400/40 text-sky-200 rounded-xl text-xs font-bold font-orbitron uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer shadow-[0_0_15px_rgba(14,165,233,0.15)] active:scale-95 disabled:opacity-50"
+              title="Accedi con Google per sincronizzare l'archivio tra browser e finestre preview"
+            >
+              <i className={`fab fa-google text-sky-400 ${isLoggingIn ? 'animate-spin' : ''}`}></i>
+              {isLoggingIn ? 'Connessione...' : 'Accedi con Google'}
+            </button>
+          )}
+
+          <label className="neon-btn text-white px-5 py-2.5 rounded-full cursor-pointer flex items-center font-bold uppercase text-xs tracking-widest transition-all">
             <i className="fas fa-file-import mr-2"></i> 1. Importa TXT
             <input type="file" className="hidden" accept=".txt" onChange={handleFileUpload} />
           </label>
           <button 
             onClick={processReport} 
             disabled={isProcessing} 
-            className="cursor-pointer bg-slate-900 border border-sky-400 text-sky-400 px-6 py-3 rounded-full font-bold uppercase text-xs tracking-widest hover:bg-sky-400/10 active:scale-95 transition-all"
+            className="cursor-pointer bg-slate-900 border border-sky-400 text-sky-400 px-5 py-2.5 rounded-full font-bold uppercase text-xs tracking-widest hover:bg-sky-400/10 active:scale-95 transition-all"
           >
             {isProcessing ? <i className="fas fa-sync fa-spin mr-2"></i> : <i className="fas fa-magic mr-2"></i>}
             2. Genera Gaps
@@ -785,6 +1006,37 @@ const App: React.FC = () => {
           )}
         </div>
       </header>
+
+      {/* Banner Sincronizzazione Cloud se disconnesso */}
+      {!currentUser && (
+        <div className="w-full max-w-7xl mb-6 p-3.5 rounded-xl bg-gradient-to-r from-sky-950/80 via-slate-900/90 to-blue-950/70 border border-sky-400/40 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-[0_0_20px_rgba(14,165,233,0.12)]">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-400 shrink-0">
+              <i className="fas fa-cloud-upload-alt text-base"></i>
+            </div>
+            <div>
+              <div className="text-xs font-orbitron font-bold text-sky-200 uppercase tracking-wider flex items-center gap-2">
+                Sincronizzazione Cloud Firebase Attiva
+                <span className="text-[9px] bg-sky-400/20 text-sky-300 border border-sky-400/30 px-2 py-0.5 rounded-full font-mono font-bold">
+                  Condivisione Multi-Browser
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Per vedere e sincronizzare i clienti inseriti su altri browser o finestre in anteprima, effettua l'accesso con Google. Tutti i dati restano collegati in tempo reale al tuo account.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={isLoggingIn}
+            className="neon-btn whitespace-nowrap text-white px-4 py-2 rounded-xl flex items-center gap-2 font-bold uppercase text-xs tracking-wider cursor-pointer shadow-lg active:scale-95 shrink-0"
+          >
+            <i className="fab fa-google"></i>
+            {isLoggingIn ? 'Connessione...' : 'Accedi con Google'}
+          </button>
+        </div>
+      )}
 
       <main className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 flex flex-col gap-6">
@@ -846,10 +1098,19 @@ const App: React.FC = () => {
                   type="button"
                   onClick={saveCurrentToClientExplicit}
                   className="px-2.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 active:scale-95 border border-emerald-400/40 text-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shrink-0 shadow-[0_0_10px_rgba(16,185,129,0.15)]"
-                  title="Salva modifiche correnti sul profilo di questo cliente"
+                  title="Salva modifiche correnti sul profilo di questo cliente (Archivio, Server e Locale)"
                 >
                   <i className="fas fa-save text-xs"></i>
                   <span className="hidden sm:inline text-[10px]">Salva</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setEditingClient(activeClient)}
+                  className="w-7 h-7 bg-slate-800/80 hover:bg-slate-700 active:scale-95 border border-slate-700 text-slate-300 rounded-lg flex items-center justify-center transition-all cursor-pointer shrink-0"
+                  title="Rinomina e modifica note del cliente attivo"
+                >
+                  <i className="fas fa-edit text-[10px]"></i>
                 </button>
 
                 <button
@@ -1522,13 +1783,22 @@ const App: React.FC = () => {
       {/* MODALE: CREAZIONE NUOVO CLIENTE */}
       {showNewClientModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-slate-900 border border-sky-500/30 rounded-2xl w-full max-w-md p-6 shadow-[0_0_40px_rgba(14,165,233,0.3)] space-y-4">
+          <form 
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (newClientName.trim()) {
+                handleCreateNewClient();
+              }
+            }}
+            className="bg-slate-900 border border-sky-500/30 rounded-2xl w-full max-w-md p-6 shadow-[0_0_40px_rgba(14,165,233,0.3)] space-y-4"
+          >
             <div className="flex justify-between items-center border-b border-sky-500/20 pb-3">
               <h3 className="text-lg font-orbitron font-bold text-sky-200 flex items-center gap-2">
                 <i className="fas fa-plus-circle text-sky-400"></i>
                 Nuovo Profilo Cliente
               </h3>
               <button 
+                type="button"
                 onClick={() => setShowNewClientModal(false)}
                 className="text-slate-400 hover:text-white p-1"
               >
@@ -1613,15 +1883,14 @@ const App: React.FC = () => {
                 Annulla
               </button>
               <button 
-                type="button"
-                onClick={handleCreateNewClient}
+                type="submit"
                 disabled={!newClientName.trim()}
                 className="px-5 py-2 text-xs font-bold text-white bg-sky-500 hover:bg-sky-400 rounded-lg transition-all shadow-[0_0_15px_rgba(14,165,233,0.3)] disabled:opacity-40"
               >
                 Crea & Attiva Profilo
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
 
@@ -1675,17 +1944,44 @@ const App: React.FC = () => {
                 Clienti registrati: <b className="text-sky-400">{clients.length}</b>
               </span>
               <div className="flex items-center gap-2">
+                {currentUser ? (
+                  <div className="px-3 py-1.5 text-xs font-bold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center gap-1.5 font-mono">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>Cloud Firebase Attivo ({currentUser.email})</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleGoogleLogin}
+                    disabled={isLoggingIn}
+                    className="px-3 py-1.5 text-xs font-bold text-sky-300 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/40 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <i className="fab fa-google text-sky-400"></i> Accedi con Google
+                  </button>
+                )}
+
+                <button 
+                  type="button"
+                  onClick={handleSyncFromServer}
+                  disabled={isSyncingServer}
+                  className="px-3 py-1.5 text-xs font-bold text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-400/30 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                  title="Sincronizza e ricarica i clienti dal server centrale"
+                >
+                  <i className={`fas fa-sync-alt ${isSyncingServer ? 'animate-spin text-sky-400' : ''}`}></i>
+                  {isSyncingServer ? 'Sincronizzazione...' : 'Sincronizza Server'}
+                </button>
+
                 <button 
                   type="button"
                   onClick={handleExportClientsJson}
-                  className="px-3 py-1.5 text-xs font-bold text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-400/30 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
+                  className="px-3 py-1.5 text-xs font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
                   title="Esporta un file JSON con tutti i clienti e le loro configurazioni"
                 >
-                  <i className="fas fa-file-export"></i> Esporta Backup (JSON)
+                  <i className="fas fa-file-export text-sky-400"></i> Esporta Backup (JSON)
                 </button>
 
                 <label className="px-3 py-1.5 text-xs font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer">
-                  <i className="fas fa-file-import"></i> Importa Backup (JSON)
+                  <i className="fas fa-file-import text-emerald-400"></i> Importa Backup (JSON)
                   <input type="file" accept=".json" onChange={handleImportClientsJson} className="hidden" />
                 </label>
 

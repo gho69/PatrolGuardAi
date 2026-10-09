@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Security Primitives
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerified() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidClient(data) {
+      return data.keys().hasAll(['id', 'name', 'roundsPerShift', 'tagsPerSite', 'nightStart', 'nightEnd'])
+        && data.id is string && isValidId(data.id)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && data.roundsPerShift is number && data.roundsPerShift >= 0 && data.roundsPerShift <= 100
+        && data.tagsPerSite is number && data.tagsPerSite >= 1 && data.tagsPerSite <= 500
+        && data.nightStart is string && data.nightStart.size() <= 10
+        && data.nightEnd is string && data.nightEnd.size() <= 10
+        && (!('code' in data) || (data.code is string && data.code.size() <= 50))
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000))
+        && (!('nightShiftEnabled' in data) || data.nightShiftEnabled is bool)
+        && (!('dayShift1Enabled' in data) || data.dayShift1Enabled is bool)
+        && (!('dayShift2Enabled' in data) || data.dayShift2Enabled is bool)
+        && (!('dayShift1Start' in data) || (data.dayShift1Start is string && data.dayShift1Start.size() <= 10))
+        && (!('dayShift1End' in data) || (data.dayShift1End is string && data.dayShift1End.size() <= 10))
+        && (!('dayShift2Start' in data) || (data.dayShift2Start is string && data.dayShift2Start.size() <= 10))
+        && (!('dayShift2End' in data) || (data.dayShift2End is string && data.dayShift2End.size() <= 10))
+        && (!('tagNames' in data) || (data.tagNames is list && data.tagNames.size() <= 500))
+        && (!('tagIntervalMin' in data) || data.tagIntervalMin is number)
+        && (!('tagIntervalMax' in data) || data.tagIntervalMax is number)
+        && (!('saturdayConfig' in data) || data.saturdayConfig is map)
+        && (!('sundayConfig' in data) || data.sundayConfig is map)
+        && (!('customRoundSlotsEnabled' in data) || data.customRoundSlotsEnabled is bool)
+        && (!('customRoundSlots' in data) || (data.customRoundSlots is list && data.customRoundSlots.size() <= 100));
+    }
+
+    // User settings and profile
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create, update: if isOwner(userId);
+      allow delete: if false;
+
+      // User's private client profiles
+      match /clients/{clientId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isValidId(clientId)
+          && incoming().id == clientId
+          && isValidClient(incoming());
+        allow update: if isOwner(userId)
+          && isValidId(clientId)
+          && isValidClient(incoming())
+          && incoming().id == existing().id;
+        allow delete: if isOwner(userId)
+          && isValidId(clientId);
+      }
+    }
+  }
+}

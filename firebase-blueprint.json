@@ -1,0 +1,115 @@
+{
+  "entities": {
+    "ClientProfile": {
+      "title": "ClientProfile",
+      "description": "Profilo di configurazione pattugliamento per un cliente o sito",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "code": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "roundsPerShift": {
+          "type": "number"
+        },
+        "tagsPerSite": {
+          "type": "number"
+        },
+        "nightShiftEnabled": {
+          "type": "boolean"
+        },
+        "dayShift1Enabled": {
+          "type": "boolean"
+        },
+        "dayShift2Enabled": {
+          "type": "boolean"
+        },
+        "nightStart": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "nightEnd": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "dayShift1Start": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "dayShift1End": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "dayShift2Start": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "dayShift2End": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "tagNames": {
+          "type": "array"
+        },
+        "tagIntervalMin": {
+          "type": "number"
+        },
+        "tagIntervalMax": {
+          "type": "number"
+        },
+        "saturdayConfig": {
+          "type": "object"
+        },
+        "sundayConfig": {
+          "type": "object"
+        },
+        "customRoundSlotsEnabled": {
+          "type": "boolean"
+        },
+        "customRoundSlots": {
+          "type": "array"
+        }
+      },
+      "required": ["id", "name", "roundsPerShift", "tagsPerSite", "nightStart", "nightEnd"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "Impostazioni e preferenze dell'utente",
+      "type": "object",
+      "properties": {
+        "activeClientId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 128
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}/clients/{clientId}": {
+      "schema": "ClientProfile",
+      "description": "Archivio clienti personalizzato dell'utente"
+    },
+    "/users/{userId}": {
+      "schema": "UserSettings",
+      "description": "Profilo e preferenze dell'utente"
+    }
+  }
+}
